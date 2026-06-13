@@ -30,13 +30,18 @@ from urllib.parse import urlparse
 PLATAFORMA_DOMINIOS = {
     "lojalocal.com", "gofind.online", "gofind.com.br", "linktr.ee",
     "beacons.ai", "bio.link", "linkbio.co", "campsite.bio",
-    # diretórios/agregadores de empresas BR — listam a loja mas não são o site dela
+    # diretórios/agregadores e "casas de dados" de CNPJ — listam a loja pelo
+    # nome jurídico, mas NÃO são o site dela.
     "solutudo.com.br", "solutudo.com", "apontador.com.br", "apontador.com",
     "telelistas.net", "guiamais.com.br", "hotfrog.com.br", "hotfrog.com",
-    "econodata.com.br", "cnpj.biz", "cnpja.com", "consultasocio.com",
+    "econodata.com.br", "cnpj.biz", "cnpja.com", "cnpja.com.br", "consultasocio.com",
     "informecadastral.com.br", "empresascnpj.com", "guiafacil.com.br",
     "encontraempresa.com.br", "boaspraticas.com.br", "ondefica.com.br",
     "achecerto.com.br", "vrum.com.br", "estabelecimento.info",
+    "casadosdados.com.br", "casadosdados.com", "consultacnpj.com",
+    "cnpj.info", "receitaws.com.br", "empresaqui.com.br", "consultar.com.br",
+    "listamais.com.br", "vumetro.com.br", "guialocal.com.br", "consultae.com.br",
+    "cnpjs.rocks", "consultapublica.com.br",
 }
 
 SOCIAL_JUNK_DOMINIOS = {

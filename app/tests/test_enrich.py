@@ -96,23 +96,32 @@ def test_cnpj_resolvido_por_contexto():
     assert out["e_icp"] is True  # CNAE 4744099 é alvo
 
 
-def test_site_usa_razao_social_do_cnpj():
-    # A busca do site é keyed na razão social — só acha se o contexto foi passado.
+def test_site_buscado_pelo_nome_do_outscraper():
+    # Busca pelo nome do Outscraper (não razão social). Só aceita o site se o
+    # NOME DA LOJA estiver no domínio (construtorbarbacena tem "construtor").
     tools = FakeTools(
-        search_map={
-            "cnpj": [SearchResult(title="Casa do Construtor Barbacena",
-                                  url="https://x.com", content=f"CNPJ {CNPJ_VALIDO} Barbacena")],
-            "construtor comercio": [SearchResult(
-                title="Construtor Materiais", url="https://construtorbarbacena.com.br",
-                content="Loja em Barbacena")],
-        },
-        receita=_receita_ok(),
+        search_map={"site oficial": [SearchResult(
+            title="Construtor Materiais", url="https://construtorbarbacena.com.br",
+            content="Loja em Barbacena")]},
         site_html='<a href="https://wa.me/5532999990000">zap</a> contato@construtor.com.br',
     )
-    out = enrich_lead(_lead(), tools)
+    out = enrich_lead(_lead(), tools)  # _lead title = "Casa do Construtor Barbacena"
     assert out["site_dominio"] == "construtorbarbacena.com.br"
     assert out["whatsapp"] == "5532999990000"
     assert out["email"] == "contato@construtor.com.br"
+
+
+def test_site_de_terceiro_que_so_menciona_nome_e_rejeitado():
+    # Página que cita nome+cidade mas o domínio não é da loja → NÃO adota.
+    tools = FakeTools(
+        search_map={"site oficial": [SearchResult(
+            title="Notícia sobre Casa do Construtor Barbacena",
+            url="https://portaldenoticias.com.br/materia-123",
+            content="Casa do Construtor Barbacena inaugura nova unidade")]},
+    )
+    out = enrich_lead(_lead(), tools)
+    assert out["site"] == ""        # domínio sem o nome da loja → rejeitado
+    assert out["site_dominio"] == ""
 
 
 def test_lead_magro_sem_fontes_ainda_e_icp():

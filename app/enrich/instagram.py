@@ -64,7 +64,7 @@ def resolve_instagram(ctx, tools) -> None:
 
 
 def _buscar_ig(ctx, tools) -> None:
-    base = ctx.receita.get("nome_fantasia") or ctx.title  # <- usa o contexto
+    base = ctx.title or ctx.receita.get("nome_fantasia") or ""  # nome do Outscraper
     results = tools.search(f"instagram {base} {ctx.city}", max_results=5)
     nt, phones = ctx.name_tokens(), ctx.phones()
 

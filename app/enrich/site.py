@@ -29,7 +29,9 @@ def resolve_site(ctx, tools) -> None:
 
 
 def _buscar_site(ctx, tools) -> None:
-    base = ctx.receita.get("razao_social") or ctx.title  # <- usa o contexto
+    # busca pelo NOME DO OUTSCRAPER (nome real da loja), nunca pela razão social —
+    # razão social puxa sites de dados (Casa dos Dados, Econodata, CNPJ.biz).
+    base = ctx.title or ctx.receita.get("nome_fantasia") or ""
     results = tools.search(f"site oficial {base} {ctx.city}", max_results=5)
     nt, phones = ctx.name_tokens(), ctx.phones()
 
@@ -40,10 +42,16 @@ def _buscar_site(ctx, tools) -> None:
         dom = domain_of(res.url)
         if not dom:
             continue
-        s, _ = score_match(text=f"{res.text()} {res.url}", names_tokens=nt,
-                           cidade_norm=ctx.cidade_norm, phones=phones)
-        if any(t in dom for t in nt):  # nome no próprio domínio = forte
-            s += 20
+        s, motivos = score_match(text=f"{res.text()} {res.url}", names_tokens=nt,
+                                 cidade_norm=ctx.cidade_norm, phones=phones)
+        dom_token = any(t in dom for t in nt)   # nome da loja no domínio
+        if dom_token:
+            s += 25
+        # CONFIRMAÇÃO (simétrica ao Instagram): só aceita se houver sinal FORTE
+        # de que o site é DA loja — nome no domínio OU telefone da loja na página.
+        # Página de terceiro que só "menciona" nome+cidade NÃO basta.
+        if not (dom_token or "telefone" in motivos):
+            continue
         if s > best_s:
             best_s, best_url = s, res.url
 
