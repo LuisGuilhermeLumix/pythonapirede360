@@ -211,6 +211,11 @@ def test_briefing_md_gerado():
     # seção 4.2 com fornecedor detectado
     assert "Tigre" in md
     assert "ESTRATÉGIA DE ABORDAGEM" in md
+    # versão HTML p/ o Gotenberg
+    htmlb = out["briefing_html"]
+    assert htmlb.startswith("<!doctype html>")
+    assert "<table>" in htmlb
+    assert "Casa do Construtor Barbacena" in htmlb
 
 
 def test_atacadista_e_reprovado():

@@ -7,6 +7,8 @@ llm.gerar_insights_comerciais (com fallback estático). Nunca levanta exceção.
 """
 from __future__ import annotations
 
+import html as _html
+import re
 from datetime import date
 
 from app.normalize import normalizar
@@ -177,3 +179,83 @@ def gerar_briefing_md(dossie: dict, insights: dict | None = None,
 
     L.append("\n---\n*Rede 360 — Briefing Confidencial*")
     return "\n".join(L)
+
+
+# --------------------------------------------------------------------------- #
+# Markdown -> HTML (p/ o Gotenberg gerar o PDF direto, sem conversão no n8n)
+# --------------------------------------------------------------------------- #
+
+_CSS = (
+    "<style>body{font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;max-width:780px;"
+    "margin:24px auto;line-height:1.5;font-size:13px}"
+    "h1{color:#0b3d91;border-bottom:3px solid #0b3d91;padding-bottom:6px}"
+    "h2{color:#0b3d91;margin-top:2px}"
+    "h3{color:#16213e;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:22px}"
+    "h4{color:#0b3d91;margin-bottom:4px}"
+    "table{border-collapse:collapse;width:100%;margin:8px 0}"
+    "th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left;font-size:12px}"
+    "th{background:#0b3d91;color:#fff}"
+    "blockquote{background:#f1f5f9;border-left:4px solid #0b3d91;margin:8px 0;padding:8px 12px;font-style:italic}"
+    "hr{border:none;border-top:1px solid #e2e8f0;margin:14px 0}"
+    "ul{margin:4px 0 4px 18px}strong{color:#0b3d91}</style>"
+)
+
+
+def _inline(t: str) -> str:
+    t = _html.escape(t)
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+
+
+def markdown_to_html(md: str) -> str:
+    lines = (md or "").split("\n")
+    out: list[str] = []
+    i, in_list = 0, False
+
+    def close_list():
+        nonlocal in_list
+        if in_list:
+            out.append("</ul>")
+            in_list = False
+
+    while i < len(lines):
+        s = lines[i].strip()
+        if not s:
+            close_list(); i += 1; continue
+        # tabela
+        if s.startswith("|") and i + 1 < len(lines) and set(lines[i + 1].strip()) <= set("|-: "):
+            close_list()
+            header = [c.strip() for c in s.strip("|").split("|")]
+            out.append("<table><thead><tr>" + "".join(f"<th>{_inline(c)}</th>" for c in header)
+                       + "</tr></thead><tbody>")
+            i += 2
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in cells) + "</tr>")
+                i += 1
+            out.append("</tbody></table>")
+            continue
+        if s.startswith("####"):
+            close_list(); out.append(f"<h4>{_inline(s[4:].strip())}</h4>")
+        elif s.startswith("###"):
+            close_list(); out.append(f"<h3>{_inline(s[3:].strip())}</h3>")
+        elif s.startswith("##"):
+            close_list(); out.append(f"<h2>{_inline(s[2:].strip())}</h2>")
+        elif s.startswith("#"):
+            close_list(); out.append(f"<h1>{_inline(s[1:].strip())}</h1>")
+        elif s == "---":
+            close_list(); out.append("<hr>")
+        elif s.startswith(">"):
+            close_list(); out.append(f"<blockquote>{_inline(s[1:].strip())}</blockquote>")
+        elif s.startswith("- "):
+            if not in_list:
+                out.append("<ul>"); in_list = True
+            out.append(f"<li>{_inline(s[2:].strip())}</li>")
+        else:
+            close_list(); out.append(f"<p>{_inline(s)}</p>")
+        i += 1
+    close_list()
+    return "\n".join(out)
+
+
+def gerar_briefing_html(md: str) -> str:
+    return f"<!doctype html><html><head><meta charset='utf-8'>{_CSS}</head><body>{markdown_to_html(md)}</body></html>"

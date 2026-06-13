@@ -41,12 +41,14 @@ def enrich_lead(lead: dict, tools=None) -> dict:
             "erros": ctx.errors + [f"consolidate: {type(e).__name__}: {e}"],
         }
 
-    # briefing markdown p/ o PDF do SDR (não pode derrubar o enriquecimento)
+    # briefing markdown + HTML p/ o PDF do SDR (não pode derrubar o enriquecimento)
     try:
-        from app.enrich.briefing import gerar_briefing_md
+        from app.enrich.briefing import gerar_briefing_md, gerar_briefing_html
         dossie["briefing_md"] = gerar_briefing_md(dossie)
+        dossie["briefing_html"] = gerar_briefing_html(dossie["briefing_md"])
     except Exception as e:
         dossie["briefing_md"] = ""
+        dossie["briefing_html"] = ""
         dossie.setdefault("erros", []).append(f"briefing: {type(e).__name__}: {e}")
 
     return dossie
