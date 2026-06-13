@@ -37,6 +37,21 @@ FORNECEDORES_REDE360 = [
 ]
 _FORN_NORM = [(f, normalizar(f)) for f in FORNECEDORES_REDE360]
 
+# Nomes de fornecedor que são palavras comuns / serviços financeiros — casariam
+# em qualquer texto e gerariam falso positivo (ex.: "cria"). Não casar em texto
+# livre. Problema real: "Cria" batendo no site do Solutudo.
+_FORN_AMBIGUO = {
+    "cria", "lume", "bolt", "pix", "up", "dotte", "forus", "safra", "cielo",
+    "talita", "barone", "bakof", "antares", "alianca", "marmif", "mebuki",
+    "leflo", "fical", "inflet", "censic", "cibrac", "nova era", "classe a",
+    "mg mar", "agora cred", "assertiva", "brasilcard", "pagseguro", "cria",
+    "certifica minas", "conecta360", "rs chinelos", "d brindes", "aco moveis",
+    "mgm moveis", "metais rainha", "toyota empilhadeiras", "urso polar",
+    "bom jesus churrasqueiras", "start quimica", "lume", "forus",
+}
+# Só fornecedores distintivos (>=5 letras e fora da lista ambígua) casam em texto.
+_FORN_MATCH = [(orig, n) for orig, n in _FORN_NORM if len(n) >= 5 and n not in _FORN_AMBIGUO]
+
 # --------------------------------------------------------------------------- #
 # 11 categorias do ICP (do AI Agent11, PASSO 2). produtos + marcas = evidência.
 # Regras de agrupamento já aplicadas (iluminação→elétrica, gesso→argamassas, etc).
@@ -125,7 +140,7 @@ def match_catalogo(marcas, produtos, texto_site: str = "") -> dict:
     base = " | ".join(str(x) for x in (list(marcas or []) + list(produtos or [])))
     alvo = normalizar(base + " " + (texto_site or "")[:200_000])
 
-    fornecedores = sorted({orig for orig, norm in _FORN_NORM if norm and contem_palavra(alvo, norm)})
+    fornecedores = sorted({orig for orig, norm in _FORN_MATCH if contem_palavra(alvo, norm)})
 
     categorias: dict[str, list[str]] = {}
     for cat, termos in _CATS_NORM.items():

@@ -218,6 +218,34 @@ def test_briefing_md_gerado():
     assert "Casa do Construtor Barbacena" in htmlb
 
 
+def test_solutudo_nao_contamina():
+    # Caso real: a busca acha o diretório Solutudo + o @ da plataforma.
+    # O enriquecimento NÃO pode adotar nada disso.
+    lead = {
+        "title": "Casa do Profissional Material de Construcao",
+        "city": "Alfredo Vasconcelos", "cidade_normalizada": "alfredo vasconcelos",
+        "state": "MG", "phone_clean": "32991423501", "cadastrar_bitrix": True,
+        "categoria_grupo": "materiais_construcao",
+    }
+    sol = "https://www.solutudo.com.br/empresas/mg/alfredo-vasconcelos/casa-do-profissional7462792"
+    tools = FakeTools(
+        search_map={
+            "site oficial": [SearchResult(title="Casa do Profissional - Solutudo",
+                                          url=sol, content="Casa do Profissional Alfredo Vasconcelos")],
+            "instagram": [SearchResult(title="Solutudo", url="https://instagram.com/solutudobrasil",
+                                       content="Casa do Profissional Alfredo Vasconcelos instagram.com/solutudobrasil")],
+        },
+        fetch_map={"solutudo": 'wa.me/5514996340966 presleyeduardo@hotmail.com instagram.com/solutudobrasil'},
+    )
+    out = enrich_lead(lead, tools)
+    assert out["site"] == ""                      # Solutudo rejeitado
+    assert out["instagram"] == ""                 # @solutudobrasil rejeitado
+    assert out["whatsapp"] == ""                  # WhatsApp do Solutudo não vaza
+    assert "presley" not in (out["email"] or "")  # email do Solutudo não vaza
+    assert out["fornecedores_rede360"] == []      # sem falso positivo "Cria"
+    assert out["e_icp"] is True                   # segue ICP pelo segmento
+
+
 def test_atacadista_e_reprovado():
     lead = _lead()
     lead["website"] = "https://atacado.com.br"

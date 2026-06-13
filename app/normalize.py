@@ -25,10 +25,18 @@ from urllib.parse import urlparse
 # --------------------------------------------------------------------------- #
 
 # Plataformas de "comércio local" / agregadores que cadastram a loja com
-# dados que NÃO são da loja. Problema real: Agro Construções Araújo.
+# dados que NÃO são da loja. Problemas reais: Gofind (Agro Construções),
+# Solutudo (Casa do Profissional).
 PLATAFORMA_DOMINIOS = {
     "lojalocal.com", "gofind.online", "gofind.com.br", "linktr.ee",
     "beacons.ai", "bio.link", "linkbio.co", "campsite.bio",
+    # diretórios/agregadores de empresas BR — listam a loja mas não são o site dela
+    "solutudo.com.br", "solutudo.com", "apontador.com.br", "apontador.com",
+    "telelistas.net", "guiamais.com.br", "hotfrog.com.br", "hotfrog.com",
+    "econodata.com.br", "cnpj.biz", "cnpja.com", "consultasocio.com",
+    "informecadastral.com.br", "empresascnpj.com", "guiafacil.com.br",
+    "encontraempresa.com.br", "boaspraticas.com.br", "ondefica.com.br",
+    "achecerto.com.br", "vrum.com.br", "estabelecimento.info",
 }
 
 SOCIAL_JUNK_DOMINIOS = {
@@ -40,7 +48,8 @@ SOCIAL_JUNK_DOMINIOS = {
 # E-mails genéricos/placeholder que não pertencem à loja.
 EMAIL_DOMINIOS_BLOQUEADOS = {
     "lojalocal.com", "gofind.online", "gofind.com.br", "example.com",
-    "sentry.io", "wixpress.com",
+    "sentry.io", "wixpress.com", "solutudo.com.br", "solutudo.com",
+    "apontador.com.br", "guiamais.com.br", "telelistas.net",
 }
 
 # Grandes redes / franquias — nunca são ICP (lojista independente).

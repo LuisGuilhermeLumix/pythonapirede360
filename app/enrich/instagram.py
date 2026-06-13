@@ -17,6 +17,11 @@ from app.enrich.extract import (
 
 IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
 JUNK_HANDLES = {"p", "reel", "reels", "explore", "stories", "tv", "accounts"}
+# Perfis de PLATAFORMAS/diretórios (não são a loja). Problema real: solutudobrasil.
+PLATFORM_HANDLES = {
+    "solutudobrasil", "solutudo", "gofind", "gofindonline", "gofind.online",
+    "lojalocal", "apontador", "guiamais", "telelistas", "linktree", "hotfrog",
+}
 LIMIAR_IG = 25
 
 
@@ -25,10 +30,26 @@ def _handle(url: str) -> str:
     return m.group(1) if m else ""
 
 
+def _handle_valido(handle: str, nt: list[str]) -> bool:
+    """
+    @ é da LOJA? Rejeita perfis de plataforma e exige que o handle contenha
+    um token do nome da loja (senão é provavelmente de outra empresa/diretório).
+    """
+    h = (handle or "").lower().strip().lstrip("@")
+    if not h or h in PLATFORM_HANDLES or any(p in h for p in PLATFORM_HANDLES):
+        return False
+    return any(t in h for t in nt) if nt else False
+
+
 def resolve_instagram(ctx, tools) -> None:
+    nt = ctx.name_tokens()
+    # 1) @ do Google Maps é confiável (veio da ficha da loja) — usa direto.
     ig = normalize_instagram(ctx.instagram_maps) if ctx.instagram_maps else ""
+    # 2) @ achado no site só vale se for da loja (não de plataforma).
     if not ig and ctx.raw_lead.get("_site_instagram"):
-        ig = normalize_instagram("https://instagram.com/" + ctx.raw_lead["_site_instagram"])
+        cand = ctx.raw_lead["_site_instagram"]
+        if _handle_valido(cand, nt):
+            ig = normalize_instagram("https://instagram.com/" + cand)
 
     if ig:
         ctx.instagram = ig
@@ -53,10 +74,11 @@ def _buscar_ig(ctx, tools) -> None:
             handle = m.group(1)
             if handle.lower() in JUNK_HANDLES or len(handle) < 3:
                 continue
+            if not _handle_valido(handle, nt):  # @ tem que ser da loja
+                continue
             s, _ = score_match(text=res.text(), names_tokens=nt,
                                cidade_norm=ctx.cidade_norm, phones=phones)
-            if any(t in handle.lower() for t in nt):
-                s += 20
+            s += 20  # token do nome já garantido no handle
             if s > best_s:
                 best_s, best_handle = s, handle
 
