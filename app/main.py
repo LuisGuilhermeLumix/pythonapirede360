@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from app.normalize import normalizar_lote
 from app.scoring import avaliar_lote, PesosICP, LIMIAR_ENRIQUECER
+from app.enrich.orchestrator import enrich_lead
 
 logger = logging.getLogger("rede360")
 logging.basicConfig(level=logging.INFO)
@@ -124,3 +125,29 @@ def process_raw(payload: Any, x_api_key: str | None = Header(default=None)):
     """Aceita o array cru do Outscraper direto no body."""
     _check_auth(x_api_key)
     return _run(payload, "", "Todas (recomendado)", None)
+
+
+# --------------------------------------------------------------------------- #
+# Enriquecimento com contexto compartilhado (CNPJ + Site + Instagram cruzados)
+# --------------------------------------------------------------------------- #
+
+class EnrichRequest(BaseModel):
+    lead: dict = Field(..., description="Um lead (saída do /process) a enriquecer")
+
+
+class EnrichBatchRequest(BaseModel):
+    leads: list[dict] = Field(..., description="Lista de leads a enriquecer")
+
+
+@app.post("/enrich")
+def enrich(req: EnrichRequest, x_api_key: str | None = Header(default=None)):
+    """Recebe 1 lead, devolve o dossiê consolidado (pronto p/ o Bitrix)."""
+    _check_auth(x_api_key)
+    return enrich_lead(req.lead)
+
+
+@app.post("/enrich/batch")
+def enrich_batch(req: EnrichBatchRequest, x_api_key: str | None = Header(default=None)):
+    """Enriquece vários leads de uma vez."""
+    _check_auth(x_api_key)
+    return {"leads": [enrich_lead(l) for l in req.leads]}

@@ -138,6 +138,48 @@ Pode mandar por request (campo `limiar_enriquecer`) sem redeploy.
 
 ---
 
+## Enriquecimento com contexto compartilhado (`/enrich`)
+
+Substitui as ~40 etapas de enriquecimento do n8n (CNPJ + Site + Instagram +
+agentes de IA soltos) por **um pipeline coerente** onde as fontes se cruzam.
+
+**O problema que resolve:** no n8n cada agente trabalhava cego — a IA do CNPJ
+não sabia o que a do site achou, e o Merge juntava tudo no escuro. Aqui existe
+um **dossiê único** (`LeadContext`) que passa por `CNPJ → Site → Instagram`,
+e cada etapa lê tudo que as anteriores descobriram:
+
+```
+app/enrich/
+  models.py        # LeadContext — o dossiê compartilhado
+  scoring.py       # cruzamento determinístico (nome/cidade/telefone/domínio)
+  tools.py         # Tavily / BrasilAPI / Apify — nunca levantam exceção
+  cnpj.py          # acha CNPJ (regex+validação) → Receita → grava razão social
+  site.py          # busca o site USANDO a razão social → extrai contatos
+  instagram.py     # acha o @ → perfil (seguidores, WhatsApp comercial)
+  decision.py      # cruza fontes, decide ICP (CNAE/categoria) + confiança
+  orchestrator.py  # enrich_lead(lead) — isola falhas, nada derruba o lead
+```
+
+**Princípios:** determinístico onde dá (regex, BrasilAPI, validação de dígito —
+grátis e confiável); robusto (toda chamada externa com timeout/try-except);
+graciosa (lead do segmento com poucos dados **ainda é ICP** e vai pro Bitrix).
+
+**Endpoint:** `POST /enrich` recebe 1 lead (saída do `/process`) e devolve o
+dossiê consolidado pronto pro Bitrix (`razao_social`, `cnpj`, `telefone`,
+`whatsapp`, `instagram`, `produtos`, `e_icp`, `confianca`, ...). No n8n: dentro
+do `Loop Over Items1`, um HTTP Request pro `/enrich` substitui o bloco de
+enriquecimento. `POST /enrich/batch` processa vários.
+
+**Env vars (EasyPanel) p/ o enriquecimento ao vivo:**
+- `TAVILY_API_KEY` — busca web (sem ela, busca é pulada; resto funciona).
+- `APIFY_TOKEN` — perfil do Instagram (opcional).
+- BrasilAPI (Receita) não precisa de chave.
+
+> Migração incremental recomendada: ativar `/enrich` rodando lado a lado com o
+> n8n e comparar acerto, uma fonte por vez. Começar pelo CNPJ.
+
+---
+
 ## Rodar local
 
 ```bash
