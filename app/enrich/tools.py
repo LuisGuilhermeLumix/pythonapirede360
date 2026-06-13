@@ -11,6 +11,7 @@ instagram_profile), então em teste injetamos FakeTools sem rede.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import urllib.request
@@ -18,20 +19,62 @@ import urllib.request
 from app.normalize import digits_only
 from app.enrich.models import SearchResult
 
+logger = logging.getLogger("rede360.tools")
+
+# UA de navegador — o default "Python-urllib" é bloqueado por alguns CDNs
+# (ex.: BrasilAPI/Vercel). Causa de "funciona no curl, falha no servidor".
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+
 
 def _http(method: str, url: str, *, headers: dict | None = None,
           body: dict | None = None, timeout: int = 20, max_bytes: int = 2_000_000):
     """GET/POST JSON robusto. Retorna dict/list em sucesso, None em qualquer falha."""
+    h = {"User-Agent": _UA}
+    if headers:
+        h.update(headers)
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    req = urllib.request.Request(url, data=data, method=method, headers=h)
     if body is not None:
         req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(max_bytes).decode("utf-8", "replace")
         return json.loads(raw) if raw.strip() else {}
-    except Exception:
+    except Exception as e:
+        status = getattr(e, "code", "")
+        logger.warning("HTTP %s %s falhou: %s %s", method, url[:90], type(e).__name__, status)
         return None
+
+
+def _from_cnpjws(d: dict) -> dict:
+    """Converte a resposta do cnpj.ws para o formato da BrasilAPI (que o resto lê)."""
+    est = d.get("estabelecimento") or {}
+    ap = est.get("atividade_principal") or {}
+
+    def _cnae(x):
+        # subclasse vem como "4744-0/99" — só os dígitos: "4744099"
+        return digits_only((x or {}).get("subclasse", ""))[:7]
+
+    return {
+        "cnpj": digits_only(est.get("cnpj", "")) or digits_only(d.get("cnpj_raiz", "")),
+        "razao_social": d.get("razao_social", "") or "",
+        "nome_fantasia": est.get("nome_fantasia", "") or "",
+        "cnae_fiscal": _cnae(ap),
+        "cnaes_secundarios": [{"codigo": _cnae(a)} for a in (est.get("atividades_secundarias") or [])],
+        "descricao_situacao_cadastral": (est.get("situacao_cadastral", "") or "").upper(),
+        "natureza_juridica": (d.get("natureza_juridica") or {}).get("descricao", "") or "",
+        "qsa": [{"nome_socio": s.get("nome", "")} for s in (d.get("socios") or []) if s.get("nome")],
+        "uf": (est.get("estado") or {}).get("sigla", "") or "",
+        "municipio": (est.get("cidade") or {}).get("nome", "") or "",
+        "logradouro": est.get("logradouro", "") or "",
+        "numero": str(est.get("numero", "") or ""),
+        "bairro": est.get("bairro", "") or "",
+        "cep": str(est.get("cep", "") or ""),
+        "ddd_telefone_1": (str(est.get("ddd1", "") or "") + str(est.get("telefone1", "") or "")),
+        "email": (est.get("email", "") or "").lower(),
+        "capital_social": d.get("capital_social", 0),
+        "descricao_porte": (d.get("porte") or {}).get("descricao", "") or "",
+    }
 
 
 class HttpTools:
@@ -81,6 +124,12 @@ class HttpTools:
                 return resp
             if tentativa < 2:
                 time.sleep(1.2)
+        # Fallback: cnpj.ws público (outra infra) — converte p/ o formato BrasilAPI.
+        resp = _http("GET", f"https://publica.cnpj.ws/cnpj/{d}", timeout=25)
+        if isinstance(resp, dict) and (resp.get("razao_social") or resp.get("estabelecimento")):
+            logger.info("CNPJ %s via fallback cnpj.ws", d)
+            return _from_cnpjws(resp)
+        logger.warning("CNPJ %s: BrasilAPI e cnpj.ws falharam", d)
         return None
 
     # ----- conteúdo do site (fetch direto, grátis) -----

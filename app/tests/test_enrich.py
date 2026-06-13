@@ -199,6 +199,30 @@ def test_whatsapp_da_bio_do_instagram():
     assert "32991423501" in out["whatsapp"]      # WhatsApp da bio capturado
 
 
+def test_fallback_cnpjws_convertido():
+    # Resposta REAL do cnpj.ws -> convertida p/ o formato BrasilAPI.
+    from app.enrich.tools import _from_cnpjws
+    cnpjws = {
+        "razao_social": "PRESLEY EDUARDO TEIXEIRA",
+        "natureza_juridica": {"descricao": "Empresário (Individual)"},
+        "porte": {"descricao": "Empresa de Pequeno Porte"},
+        "socios": [],
+        "estabelecimento": {
+            "cnpj": "18693875000181", "nome_fantasia": "CASA DO PROFISSIONAL",
+            "situacao_cadastral": "Ativa",
+            "atividade_principal": {"subclasse": "4744-0/99"},
+            "atividades_secundarias": [{"subclasse": "2599-3/02"}],
+            "estado": {"sigla": "MG"}, "cidade": {"nome": "ALFREDO VASCONCELOS"},
+        },
+    }
+    d = _from_cnpjws(cnpjws)
+    assert d["cnae_fiscal"] == "4744099"        # / e - removidos corretamente
+    assert d["razao_social"] == "PRESLEY EDUARDO TEIXEIRA"
+    assert d["nome_fantasia"] == "CASA DO PROFISSIONAL"
+    assert d["descricao_situacao_cadastral"] == "ATIVA"
+    assert d["uf"] == "MG" and d["municipio"] == "ALFREDO VASCONCELOS"
+
+
 def test_cnpj_inativo_derruba_icp():
     receita = _receita_ok()
     receita["descricao_situacao_cadastral"] = "BAIXADA"
