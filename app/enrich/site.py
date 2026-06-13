@@ -14,6 +14,7 @@ from app.normalize import (
     normalize_real_site, domain_of, digits_only, EMAIL_DOMINIOS_BLOQUEADOS,
 )
 from app.enrich.scoring import score_match
+from app.enrich.llm import extract_site_intel
 
 IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
 WA_RX = re.compile(r"(?:wa\.me/|api\.whatsapp\.com/send\?phone=)(\+?\d{10,13})", re.I)
@@ -93,3 +94,15 @@ def _extrair_do_site(ctx, tools) -> None:
     if ctx.phone_clean and ctx.site_phones:
         ok = any(p[-8:] == ctx.phone_clean[-8:] for p in ctx.site_phones)
         ctx.add_check("site_telefone_bate", ok, ", ".join(ctx.site_phones))
+
+    # parte FUZZY (única que usa LLM): produtos/marcas. Opcional — {} sem chave.
+    intel = extract_site_intel(html, ctx.names())
+    if intel:
+        ctx.produtos = intel.get("produtos") or ctx.produtos
+        ctx.marcas = intel.get("marcas") or ctx.marcas
+        ctx.tem_ecommerce = bool(intel.get("tem_ecommerce")) or ctx.tem_ecommerce
+        contatos = intel.get("contatos") or {}
+        if not ctx.site_whatsapp and contatos.get("whatsapp"):
+            ctx.site_whatsapp = digits_only(contatos["whatsapp"])
+        if not ctx.site_email and contatos.get("email"):
+            ctx.site_email = str(contatos["email"]).lower()
