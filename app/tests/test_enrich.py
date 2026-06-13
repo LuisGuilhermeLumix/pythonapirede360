@@ -107,7 +107,7 @@ def test_site_buscado_pelo_nome_do_outscraper():
     )
     out = enrich_lead(_lead(), tools)  # _lead title = "Casa do Construtor Barbacena"
     assert out["site_dominio"] == "construtorbarbacena.com.br"
-    assert out["whatsapp"] == "5532999990000"
+    assert out["whatsapp"] == "32999990000"   # normalizado (sem 55)
     assert out["email"] == "contato@construtor.com.br"
 
 
@@ -196,7 +196,8 @@ def test_whatsapp_da_bio_do_instagram():
     })
     out = enrich_lead(lead, tools)
     assert out["instagram_seguidores"] == 2806
-    assert "32991423501" in out["whatsapp"]      # WhatsApp da bio capturado
+    assert out["whatsapp"] == "32991423501"          # WhatsApp limpo (celular 11 díg.)
+    assert "3233671143" in out["telefones_site"]     # fixo "Telefone 32 3367-1143" da bio
 
 
 def test_fallback_cnpjws_convertido():
@@ -352,7 +353,7 @@ def test_link_da_bio_linktree_extrai_site_e_whatsapp():
     out = enrich_lead(lead, tools)
     assert out["bio_link"] == "https://linktr.ee/lojaconstrutor"
     assert out["site_dominio"] == "lojaconstrutorreal.com.br"
-    assert out["whatsapp"] == "5532988887777"
+    assert out["whatsapp"] == "32988887777"   # normalizado (sem 55)
 
 
 def test_link_da_bio_site_direto():

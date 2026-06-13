@@ -7,8 +7,19 @@ qualificação e calcula o score de 7 critérios. Saída pronta p/ o briefing/PD
 """
 from __future__ import annotations
 
+from app.normalize import normalize_phone
 from app.enrich.catalogo_rede360 import match_catalogo
 from app.enrich.icp_rede360 import avaliar_icp
+
+
+def _melhor_whatsapp(cands: list) -> str:
+    """Escolhe o melhor número de WhatsApp — prefere celular (11 díg.) bem formado."""
+    norm = [normalize_phone(c) for c in cands if c]
+    norm = [n for n in norm if n]
+    for n in norm:
+        if len(n) == 11:        # celular com 9 dígitos = WhatsApp válido
+            return n
+    return norm[0] if norm else ""
 
 # CNAEs de materiais de construção (alvo) e prefixos claramente fora do segmento.
 CNAE_ALVO = {
@@ -70,9 +81,13 @@ def consolidate(ctx) -> dict:
         conf = "baixa"
 
     # ----- contatos consolidados (melhor fonte primeiro) -----
-    whatsapp = ctx.site_whatsapp or ctx.instagram_business_phone or ""
+    whatsapp = _melhor_whatsapp([ctx.site_whatsapp, ctx.instagram_business_phone])
     telefone = ctx.phone_clean or ctx.receita.get("telefone", "") or ""
     email = ctx.site_email or ctx.receita.get("email", "") or ctx.email_maps or ""
+    # telefones extras (ex.: fixo da bio) — tira o principal e o WhatsApp p/ não repetir
+    _princ = {normalize_phone(telefone), normalize_phone(whatsapp)}
+    telefones_extra = [p for p in (ctx.site_phones or [])
+                       if normalize_phone(p) and normalize_phone(p) not in _princ]
 
     return {
         # ----- decisão / qualificação -----
@@ -103,7 +118,7 @@ def consolidate(ctx) -> dict:
         "telefone": telefone,
         "whatsapp": whatsapp,
         "email": email,
-        "telefones_site": ctx.site_phones,
+        "telefones_site": telefones_extra,
         "site": ctx.site,
         "site_dominio": ctx.site_domain,
         "instagram": ctx.instagram,

@@ -13,7 +13,7 @@ from app.normalize import normalize_instagram, digits_only, domain_of, normalize
 from app.enrich.scoring import score_match
 from app.enrich.extract import (
     is_aggregator, extract_links, pick_real_site, absorver_contatos,
-    whatsapp_from_text, whatsapp_from_link,
+    whatsapp_from_text, whatsapp_from_link, extract_contacts,
 )
 
 IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
@@ -118,6 +118,14 @@ def _perfil_ig(ctx, tools) -> None:
         wa = whatsapp_from_text(ctx.instagram_bio)
         if wa:
             ctx.instagram_business_phone = wa
+
+    # demais contatos da bio (ex.: "/// Telefone 32 3367-1143", e-mail)
+    bio_c = extract_contacts(ctx.instagram_bio)
+    for p in bio_c["phones"]:
+        if p and p not in ctx.site_phones:
+            ctx.site_phones.append(p)
+    if not ctx.site_email and bio_c["email"]:
+        ctx.site_email = bio_c["email"]
 
     # coleta TODOS os links da bio (externalUrl, externalUrls, bioLinks...)
     links: list[str] = []

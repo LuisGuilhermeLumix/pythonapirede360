@@ -90,6 +90,8 @@ def gerar_briefing_md(dossie: dict, insights: dict | None = None,
     L.append(f"| Endereço | {_v(d.get('endereco'))} |")
     L.append(f"| Telefone | {_v(d.get('telefone'))} |")
     L.append(f"| WhatsApp | {_v(d.get('whatsapp'))} |")
+    if d.get("telefones_site"):
+        L.append(f"| Outros telefones | {', '.join(d['telefones_site'])} |")
     L.append(f"| E-mail | {_v(d.get('email'))} |")
     L.append(f"| Site | {_v(d.get('site'))} |")
     ig = d.get("instagram")
