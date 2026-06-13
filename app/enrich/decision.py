@@ -1,18 +1,14 @@
 """
-decision.py — Consolida o dossiê, cruza as fontes e decide ICP + confiança.
+decision.py — Consolida o dossiê, cruza as fontes e qualifica como ICP Rede 360.
 
-Regra de ICP (alinhada ao pedido: "se é do segmento, vai pro Bitrix mesmo com
-poucos dados"):
-  - Base: segmento confirmado pela categoria do Google Maps (cadastrar_bitrix).
-  - Se houver CNPJ: a Receita REFINA — CNPJ inativo ou CNAE bloqueado derruba;
-    CNAE alvo confirma. Sem CNPJ, vale a categoria (lead magro ainda passa).
-Confiança vem de quantas fontes independentes concordam.
+Usa a lógica REAL do workflow 03 (icp_rede360 + catalogo_rede360): compara o mix
+da loja com as 11 categorias e os 84 fornecedores da rede, aplica os PASSOS de
+qualificação e calcula o score de 7 critérios. Saída pronta p/ o briefing/PDF.
 """
 from __future__ import annotations
 
-from app.normalize import normalizar
-from app.enrich.scoring import first_city_token
 from app.enrich.catalogo_rede360 import match_catalogo
+from app.enrich.icp_rede360 import avaliar_icp
 
 # CNAEs de materiais de construção (alvo) e prefixos claramente fora do segmento.
 CNAE_ALVO = {
@@ -48,34 +44,23 @@ def _cidade_estado(ctx) -> str:
     return f"{cidade} - {uf}".strip(" -")
 
 
+def _decisor(ctx) -> dict:
+    socios = ctx.receita.get("socios") or []
+    return {"nome": socios[0] if socios else "", "cargo": "Sócio" if socios else "",
+            "fonte": "Receita Federal (QSA)" if socios else ""}
+
+
 def consolidate(ctx) -> dict:
     cnae_str, cnae_alvo, cnae_block = _cnae_status(ctx.receita)
     situacao = ctx.receita.get("situacao", "")
 
-    # ----- decisão ICP -----
-    motivos: list[str] = []
-    e_icp = ctx.cadastrar_bitrix  # base: categoria do Maps
-    if ctx.receita:
-        if situacao and situacao != "ATIVA":
-            e_icp = False
-            motivos.append(f"CNPJ {situacao} na Receita")
-        elif cnae_block:
-            e_icp = False
-            motivos.append(f"CNAE fora do segmento ({cnae_str})")
-        elif cnae_alvo:
-            e_icp = True
-            motivos.append("CNAE de materiais de construção confirmado")
-    if e_icp and not motivos:
-        motivos.append("Segmento confirmado pela categoria do Google Maps")
-
-    # ----- comparação com o catálogo da Rede 360 (sinal forte de ICP) -----
+    # ----- catálogo Rede 360 + qualificação ICP (lógica do workflow 03) -----
     match = match_catalogo(ctx.marcas, ctx.produtos, ctx.site_text)
-    if match["vende_marcas_rede360"] and e_icp:
-        motivos.append("Vende marcas Rede 360: " + ", ".join(match["marcas_rede360"]))
+    icp = avaliar_icp(ctx, match, situacao, cnae_alvo, cnae_block)
 
-    # ----- confiança (quantas fontes concordam) -----
+    # ----- confiança (quantas fontes independentes concordam) -----
     ok = sum(1 for c in ctx.cross_checks if c["ok"])
-    if match["vende_marcas_rede360"] and (ctx.cnpj or ctx.site):
+    if match["fornecedores_rede360"] and (ctx.cnpj or ctx.site):
         conf = "alta"
     elif ctx.cnpj and ctx.site and ok >= 2:
         conf = "alta"
@@ -90,49 +75,57 @@ def consolidate(ctx) -> dict:
     email = ctx.site_email or ctx.receita.get("email", "") or ctx.email_maps or ""
 
     return {
-        # decisão
-        "e_icp": e_icp,
-        "cadastrar_bitrix": e_icp,
-        "icp_motivos": motivos,
+        # ----- decisão / qualificação -----
+        "e_icp": icp["e_icp"],
+        "cadastrar_bitrix": icp["e_icp"],
+        "dados_insuficientes": icp["dados_insuficientes"],
+        "potencial": icp["potencial"],
+        "motivo_icp": icp["motivo_icp"],
         "confianca": conf,
         "consistencia": {"checks_ok": ok, "checks_total": len(ctx.cross_checks),
                          "detalhes": ctx.cross_checks},
-        # identidade
+        # ----- score (7 critérios, do Agent11) -----
+        "score_total": icp["score_total"],
+        "score_breakdown": icp["score_breakdown"],
+        "classificacao": icp["classificacao"],
+        # ----- identidade -----
         "title": ctx.title,
         "razao_social": ctx.receita.get("razao_social", ""),
         "nome_fantasia": ctx.receita.get("nome_fantasia", "") or ctx.title,
         "cnpj": ctx.cnpj,
         "cnpj_fonte": ctx.cnpj_source,
-        "cnpj_score": ctx.cnpj_score,
         "cnae_primario": ctx.receita.get("cnae_primario", ""),
         "situacao_cadastral": situacao,
         "socios": ctx.receita.get("socios", []),
-        # contato
+        "decisor": _decisor(ctx),
+        "porte": ctx.receita.get("porte", ""),
+        # ----- contato -----
         "telefone": telefone,
         "whatsapp": whatsapp,
         "email": email,
+        "telefones_site": ctx.site_phones,
         "site": ctx.site,
         "site_dominio": ctx.site_domain,
         "instagram": ctx.instagram,
         "instagram_username": ctx.instagram_username,
         "instagram_seguidores": ctx.instagram_followers,
-        # comercial (informação rica p/ o PDF do SDR)
+        "instagram_bio": ctx.instagram_bio,
+        "bio_link": ctx.bio_link,
+        # ----- comercial / mix (p/ o briefing do SDR) -----
         "produtos": ctx.produtos,
         "marcas": ctx.marcas,
         "tem_ecommerce": ctx.tem_ecommerce,
+        "segmentos_principais": icp["segmentos_principais"],
+        "evidencias_por_categoria": icp["evidencias_por_categoria"],
+        "fornecedores_rede360": icp["fornecedores_rede360"],
+        "nivel_afinidade": icp["nivel_afinidade"],
         "vende_marcas_rede360": match["vende_marcas_rede360"],
-        "marcas_rede360": match["marcas_rede360"],
-        "categorias_rede360": match["categorias_rede360"],
-        "match_rede360_score": match["score"],
-        "telefones_site": ctx.site_phones,
-        "instagram_bio": ctx.instagram_bio,
-        "bio_link": ctx.bio_link,
-        # endereço
+        # ----- endereço -----
         "endereco": _montar_endereco(ctx),
         "cidade": ctx.city,
         "estado": ctx.state,
         "cidade_estado": _cidade_estado(ctx),
-        # rastreio
+        # ----- rastreio -----
         "fontes": {"cnpj": ctx.cnpj_source, "site": ctx.site_source,
                    "instagram": ctx.instagram_source},
         "erros": ctx.errors,

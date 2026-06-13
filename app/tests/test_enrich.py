@@ -137,7 +137,7 @@ def test_cnae_bloqueado_derruba_icp():
     )
     out = enrich_lead(_lead(), tools)
     assert out["e_icp"] is False
-    assert any("fora do segmento" in m for m in out["icp_motivos"])
+    assert "fora do segmento" in out["motivo_icp"]
 
 
 def test_cnpj_inativo_derruba_icp():
@@ -169,16 +169,42 @@ def test_nunca_levanta_excecao_com_lixo():
         assert "e_icp" in out
 
 
-def test_marcas_rede360_detectadas_no_site():
+def test_fornecedores_rede360_detectados_no_site():
     lead = _lead()
     lead["website"] = "https://casadoprofissional.com.br"  # site direto do Maps
-    tools = FakeTools(site_html="Trabalhamos com Quartzolit, Votorantim e tubos Tigre. Argamassa e cimento.")
+    tools = FakeTools(site_html=(
+        "Trabalhamos com Quartzolit e tubos Tigre. Vendemos cimento, "
+        "argamassa, registros, conexoes e telhas Brasilit."))
     out = enrich_lead(lead, tools)
     assert out["vende_marcas_rede360"] is True
-    assert "quartzolit" in out["marcas_rede360"]
-    assert "votorantim" in out["marcas_rede360"]
-    assert any("Vende marcas Rede 360" in m for m in out["icp_motivos"])
+    assert "Tigre" in out["fornecedores_rede360"]
+    assert "Quartzolit" in out["fornecedores_rede360"]
+    assert "parceiros Rede 360" in out["motivo_icp"]
+    assert out["nivel_afinidade"] == "alto"
     assert out["confianca"] == "alta"
+
+
+def test_categorias_confirmadas_do_mix():
+    lead = _lead()
+    lead["website"] = "https://x.com.br"
+    tools = FakeTools(site_html=(
+        "tubos e conexoes Tigre; fios, tomadas e disjuntores; "
+        "tintas, verniz e pincel Eucatex"))
+    out = enrich_lead(lead, tools)
+    # hidráulico + elétrico + tintas confirmados (2+ evidências cada)
+    assert set(out["segmentos_principais"]) >= {"hidraulico", "eletrico", "tintas_acabamentos"}
+    assert out["e_icp"] is True
+    assert out["score_total"] > 0
+    assert out["classificacao"] in ("Quente", "Morno", "Frio")
+
+
+def test_atacadista_e_reprovado():
+    lead = _lead()
+    lead["website"] = "https://atacado.com.br"
+    tools = FakeTools(site_html="Somos atacadista. Atendemos lojistas com venda no atacado. Tigre, cimento, tubos.")
+    out = enrich_lead(lead, tools)
+    assert out["e_icp"] is False
+    assert "tacadista" in out["motivo_icp"] or "varejo" in out["motivo_icp"]
 
 
 def test_link_da_bio_linktree_extrai_site_e_whatsapp():
