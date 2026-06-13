@@ -1,103 +1,106 @@
 """
-catalogo_rede360.py — Catálogo REAL da Rede 360 (extraído do workflow 03).
+catalogo_rede360.py — Catálogo OFICIAL da Rede 360 (lista do cliente).
 
-Fonte: AI Agent11 (definição de ICP) do workflow original. Contém:
-  - FORNECEDORES_REDE360: os 84 parceiros oficiais da rede.
-  - CATEGORIAS_PRODUTO: as 11 categorias do ICP, cada uma com produtos e marcas
-    que servem de EVIDÊNCIA (uma categoria só "conta" com 2+ evidências reais).
-  - ATACADISTA_SINAIS: linguagem que indica B2B/atacado (desqualifica — não é varejo).
-
-Tudo determinístico (match por palavra inteira). Casar fornecedores = sinal
-forte de ICP e argumento de venda nº 1 ("você já trabalha com a Tigre, que é
-parceira da Rede 360").
+- FORNECEDORES_REDE360: roster oficial dos parceiros (para exibir no briefing).
+- CATEGORIAS_PRODUTO: as 11 categorias do ICP, com produtos/marcas-evidência.
+- Matching: usa as grafias REAIS das marcas (como aparecem nos sites) e ignora
+  parceiros de serviço/financeiro e nomes de palavra comum (evita falso positivo).
 """
 from __future__ import annotations
 
 from app.normalize import normalizar, contem_palavra
 
 # --------------------------------------------------------------------------- #
-# 84 fornecedores/parceiros oficiais da Rede 360 (do AI Agent11)
+# Roster oficial (lista do cliente). Exibido no briefing.
 # --------------------------------------------------------------------------- #
 FORNECEDORES_REDE360 = [
-    "A.J. Rorato", "Aço Móveis", "Agora Cred", "Aliança", "Amanco", "Antares",
+    "A.J. Rorato", "Açomóveis", "Agoracred", "Aliança", "Amanco", "Antares",
     "Assertiva", "Atacadão das Tintas", "Atacadão Lazer", "Atlas", "Bakof",
     "Barone", "Bestfer", "Bolt", "Bom Jesus Churrasqueiras", "Bosch",
-    "Brasilcard", "Brasilit", "Carmelo Fior", "Cedasa", "Censic",
-    "Certifica Minas", "Cibrac", "Cielo", "Classe A", "Eccofer", "Condor",
-    "Construp", "Conecta360", "Cortag", "Cozimax", "Cria", "CRVD", "D+Brindes",
-    "Docol", "Dotte", "Dplastic", "Egaplast", "Embramaço", "Esquadromil",
-    "Eternit", "Eucadoor", "Eucatex", "Fabrinox", "Fame", "Fassa Bortolo",
-    "Fertak", "Formigrês", "Fortlev", "Forus", "Igekrilh", "Fical", "Incopiso",
-    "Inflet", "Krona", "Leflo", "Renzetti", "Lume", "Marmif", "Mebuki",
-    "Metais Rainha", "MG Mar", "Girius", "MGM Moveis", "Nova Era", "Oriontec",
-    "Pado", "Pagseguro", "Palma Plásticos", "Pix Revestimentos", "Plastubos",
-    "Quartzolit", "Roca Brasil", "RS Chinelos", "Safol", "Safra", "Start Quimica",
-    "Talita", "Tambasa", "Tigre", "Toyota Empilhadeiras", "Up+", "Urso Polar",
-    "Zagonel",
+    "Brasilcard", "Brasilit", "Carmelo Fior", "Cedasa", "Censi", "Certificaminas",
+    "Cibra", "Cielo", "Classe A (Eccofer)", "Condor", "Construp", "Conecta360",
+    "Cortag", "Cozimax", "Cria", "CRV", "D+Brindes", "Docol", "Dotte", "Dplastic",
+    "Egaplast", "Embramaco", "Esquadromil", "Eternit", "Eucadoor", "Eucatex",
+    "Fabrinox", "Fame", "Fassa Bortolo", "Fertak", "Formigres", "Fortlev",
+    "Forusi", "Gekril", "HF", "Ical", "Incopisos", "Inflet", "Krona", "Lef",
+    "Lorenzetti", "Lume", "Marfim", "Mebuki", "Metais Rainha", "MG Margirius",
+    "MGM Moveis", "Nova Era", "Oriontec", "Pado", "Pagseguro", "Palma Plásticos",
+    "Pix Revestimentos", "Plastubos", "Quartzolit", "Roca Brasil", "RS Chinelos",
+    "Safol", "Safra", "Start Quimica", "Talita", "Tambasa", "Tigre",
+    "Toyota Empilhadeiras", "Up+", "Urso Polar", "Zagonel",
 ]
-_FORN_NORM = [(f, normalizar(f)) for f in FORNECEDORES_REDE360]
 
-# Nomes de fornecedor que são palavras comuns / serviços financeiros — casariam
-# em qualquer texto e gerariam falso positivo (ex.: "cria"). Não casar em texto
-# livre. Problema real: "Cria" batendo no site do Solutudo.
-_FORN_AMBIGUO = {
-    "cria", "lume", "bolt", "pix", "up", "dotte", "forus", "safra", "cielo",
-    "talita", "barone", "bakof", "antares", "alianca", "marmif", "mebuki",
-    "leflo", "fical", "inflet", "censic", "cibrac", "nova era", "classe a",
-    "mg mar", "agora cred", "assertiva", "brasilcard", "pagseguro", "cria",
-    "certifica minas", "conecta360", "rs chinelos", "d brindes", "aco moveis",
-    "mgm moveis", "metais rainha", "toyota empilhadeiras", "urso polar",
-    "bom jesus churrasqueiras", "start quimica", "lume", "forus",
+# Grafia interna -> como a marca aparece nos sites (para casar de verdade).
+_GRAFIA = {
+    "mg margirius": "margirius",
+    "roca brasil": "roca",
+    "atacadao das tintas": "atacadao das tintas",
 }
-# Só fornecedores distintivos (>=5 letras e fora da lista ambígua) casam em texto.
-_FORN_MATCH = [(orig, n) for orig, n in _FORN_NORM if len(n) >= 5 and n not in _FORN_AMBIGUO]
+
+# Parceiros de serviço/financeiro e palavras comuns — NÃO casar em texto livre
+# (gerariam falso positivo, ex.: "cria", "safra", "aliança").
+_NAO_CASAR = {
+    "agoracred", "assertiva", "brasilcard", "cielo", "pagseguro", "safra",
+    "certificaminas", "conecta360", "cria", "bolt", "lume", "alianca", "nova era",
+    "marfim", "talita", "barone", "antares", "dotte", "forusi", "censi",
+    "rs chinelos", "d brindes", "d+brindes", "acomoveis", "aco moveis", "mgm moveis",
+    "bom jesus churrasqueiras", "atacadao lazer", "toyota empilhadeiras",
+    "urso polar", "safol", "gekril", "inflet", "oriontec", "construp", "classe a",
+    "eccofer", "mebuki", "up", "up+", "hf", "lef", "crv", "ical", "cozimax",
+    "a.j. rorato", "aj rorato", "mebuki", "dplastic", "egaplast",
+}
+
+# Conjunto de match: (display, grafia_normalizada), só nomes distintivos (>=5).
+_FORN_MATCH = []
+for _disp in FORNECEDORES_REDE360:
+    _n = _GRAFIA.get(normalizar(_disp), normalizar(_disp))
+    if len(_n) >= 5 and _n not in _NAO_CASAR:
+        _FORN_MATCH.append((_disp, _n))
 
 # --------------------------------------------------------------------------- #
-# 11 categorias do ICP (do AI Agent11, PASSO 2). produtos + marcas = evidência.
-# Regras de agrupamento já aplicadas (iluminação→elétrica, gesso→argamassas, etc).
+# 11 categorias do ICP — produtos + marcas-evidência (grafias reais dos sites).
 # --------------------------------------------------------------------------- #
 CATEGORIAS_PRODUTO = {
     "hidraulico": {
         "produtos": ["tubos", "conexoes", "caixa d agua", "caixas d agua", "registro",
-                     "registros", "joelho", "luva", "sifao", "torneira boia", "fossa"],
-        "marcas": ["tigre", "amanco", "krona", "fortlev", "aliança"],
+                     "registros", "joelho", "luva", "sifao", "fossa"],
+        "marcas": ["tigre", "amanco", "krona", "fortlev"],
     },
     "eletrico": {
         "produtos": ["fios", "cabos", "tomadas", "disjuntores", "quadro de luz",
                      "interruptores", "eletroduto", "lampada", "luminaria", "led",
-                     "iluminacao", "automacao"],
-        "marcas": ["fame", "margirius", "lume", "zagonel"],
+                     "iluminacao"],
+        "marcas": ["fame", "margirius", "lorenzetti", "lume", "zagonel"],
     },
     "loucas_metais": {
         "produtos": ["torneiras", "chuveiros", "bacias", "vaso sanitario", "pia",
                      "cuba", "lavatorio", "ducha", "metais sanitarios"],
-        "marcas": ["docol", "roca", "metais rainha"],
+        "marcas": ["docol", "roca", "lorenzetti", "metais rainha"],
     },
     "argamassas_quimicos": {
         "produtos": ["argamassa", "rejunte", "impermeabilizante", "gesso", "drywall",
-                     "massa corrida", "aditivo", "cola"],
-        "marcas": ["quartzolit", "fassa bortolo", "fassa", "start quimica", "igekrilh"],
+                     "massa corrida", "aditivo"],
+        "marcas": ["quartzolit", "fassa bortolo", "start quimica"],
     },
     "telhas_coberturas": {
         "produtos": ["telhas", "telha", "cumeeira", "calhas", "telhado", "cobertura"],
-        "marcas": ["brasilit", "eternit", "embramaço"],
+        "marcas": ["brasilit", "eternit", "embramaco"],
     },
     "pisos_revestimentos": {
         "produtos": ["porcelanato", "ceramica", "laminado", "piso", "revestimento",
                      "azulejo", "rodape"],
-        "marcas": ["carmelo fior", "incopiso", "incepa", "formigrês", "cedasa",
+        "marcas": ["carmelo fior", "incopisos", "cedasa", "formigres",
                    "pix revestimentos"],
     },
     "tintas_acabamentos": {
         "produtos": ["tintas", "tinta", "verniz", "massa", "pincel", "rolo",
                      "solvente", "textura", "selador"],
-        "marcas": ["eucatex", "atlas", "condor", "atacadão das tintas"],
+        "marcas": ["eucatex", "atlas", "condor", "atacadao das tintas"],
     },
     "ferragens_ferramentas": {
         "produtos": ["parafusos", "fechaduras", "ferramentas", "dobradica", "cadeado",
                      "broca", "furadeira", "rebite", "disco de corte"],
-        "marcas": ["bosch", "bestfer", "pado", "cortag", "fertak", "tambasa",
-                   "classe a", "eccofer"],
+        "marcas": ["bosch", "bestfer", "pado", "cortag", "fertak", "tambasa"],
     },
     "portas_esquadrias": {
         "produtos": ["portas", "janelas", "batente", "esquadria", "portao", "guarnicao"],
@@ -106,12 +109,12 @@ CATEGORIAS_PRODUTO = {
     "plasticos_utilidades": {
         "produtos": ["baldes", "caixa plastica", "embalagens", "mangueira", "lona",
                      "bombona"],
-        "marcas": ["plastubos", "palma plásticos", "dplastic", "egaplast", "bakof"],
+        "marcas": ["plastubos", "palma plasticos", "bakof"],
     },
     "cimento_insumos": {
         "produtos": ["cimento", "cal", "areia", "brita", "pedra", "argila", "bloco",
                      "tijolo"],
-        "marcas": ["cibrac"],
+        "marcas": ["cibra"],
     },
 }
 
@@ -122,7 +125,6 @@ ATACADISTA_SINAIS = [
     "revenda para lojas", "preço de atacado para revenda",
 ]
 
-# Pré-normaliza para performance.
 _CATS_NORM = {
     cat: {normalizar(t) for t in (ev["produtos"] + ev["marcas"])}
     for cat, ev in CATEGORIAS_PRODUTO.items()
@@ -133,14 +135,14 @@ _ATACADO_NORM = [normalizar(s) for s in ATACADISTA_SINAIS]
 def match_catalogo(marcas, produtos, texto_site: str = "") -> dict:
     """
     Compara a loja com o catálogo Rede 360 (determinístico, palavra inteira):
-      - quais FORNECEDORES da rede ela cita;
+      - quais FORNECEDORES da rede ela cita (grafia real, sem serviços/palavras comuns);
       - quais das 11 CATEGORIAS têm 2+ evidências (produtos/marcas reais);
       - sinais de atacadista.
     """
     base = " | ".join(str(x) for x in (list(marcas or []) + list(produtos or [])))
     alvo = normalizar(base + " " + (texto_site or "")[:200_000])
 
-    fornecedores = sorted({orig for orig, norm in _FORN_MATCH if contem_palavra(alvo, norm)})
+    fornecedores = sorted({disp for disp, n in _FORN_MATCH if contem_palavra(alvo, n)})
 
     categorias: dict[str, list[str]] = {}
     for cat, termos in _CATS_NORM.items():
