@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 
 from app.normalize import is_valid_cnpj, digits_only, normalizar
-from app.enrich.scoring import score_match, first_city_token
+from app.enrich.scoring import score_match, first_city_token, name_tokens, distinctive
 
 CNPJ_RX = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")
 LIMIAR_CNPJ = 30
@@ -122,12 +122,25 @@ def _consultar_receita(ctx, tools) -> None:
         "socios": socios,
     }
 
+    # cidade bate?
+    muni = normalizar(ctx.receita["municipio"])
+    city_ok = bool(ctx.cidade_norm and muni and first_city_token(ctx.cidade_norm) in muni)
     ctx.add_check("cnpj_ativo", ctx.receita["situacao"] == "ATIVA", ctx.receita["situacao"])
-    if ctx.cidade_norm and ctx.receita["municipio"]:
-        ok = first_city_token(ctx.cidade_norm) in normalizar(ctx.receita["municipio"])
-        ctx.add_check("cnpj_cidade_bate", ok, ctx.receita["municipio"])
-    # cross-check de ouro: nome fantasia da Receita bate com o nome do Maps?
-    if ctx.receita["nome_fantasia"] and ctx.nome_norm:
-        nf = normalizar(ctx.receita["nome_fantasia"])
-        ok = any(t in nf for t in ctx.name_tokens()) or any(t in ctx.nome_norm for t in nf.split())
-        ctx.add_check("cnpj_nome_bate", ok, ctx.receita["nome_fantasia"])
+    if muni:
+        ctx.add_check("cnpj_cidade_bate", city_ok, ctx.receita["municipio"])
+
+    # nome DISTINTIVO (Terraços, Marcinho...) bate com a Receita?
+    # IMPORTANTE: tokens só do nome do LEAD (não do receita recém-buscado, senão
+    # ele casaria consigo mesmo).
+    alvo_nome = normalizar(ctx.receita["nome_fantasia"] + " " + ctx.receita["razao_social"])
+    dist = distinctive(name_tokens(ctx.title))
+    name_ok = any(t in alvo_nome for t in dist) if dist else False
+    if ctx.receita["nome_fantasia"] or ctx.receita["razao_social"]:
+        ctx.add_check("cnpj_nome_bate", name_ok, ctx.receita["razao_social"])
+
+    # REJEITA CNPJ achado por BUSCA que é claramente outra empresa
+    # (cidade diferente E nome distintivo não bate). Melhor sem CNPJ do que errado.
+    if ctx.cnpj_source != "maps" and not city_ok and not name_ok:
+        ctx.add_check("cnpj_rejeitado", True,
+                      f"Outra empresa? {ctx.receita['municipio']} / {ctx.receita['razao_social']}")
+        ctx.cnpj, ctx.cnpj_source, ctx.cnpj_score, ctx.receita = "", "", 0, {}

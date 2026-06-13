@@ -34,6 +34,7 @@ def _buscar_site(ctx, tools) -> None:
     base = ctx.title or ctx.receita.get("nome_fantasia") or ""
     results = tools.search(f"site oficial {base} {ctx.city}", max_results=5)
     nt, phones = ctx.name_tokens(), ctx.phones()
+    nt_dist = ctx.distinctive_tokens()
 
     best_url, best_s = "", 0
     for res in results:
@@ -44,7 +45,8 @@ def _buscar_site(ctx, tools) -> None:
             continue
         s, motivos = score_match(text=f"{res.text()} {res.url}", names_tokens=nt,
                                  cidade_norm=ctx.cidade_norm, phones=phones)
-        dom_token = any(t in dom for t in nt)   # nome da loja no domínio
+        # nome DISTINTIVO no domínio (não "tintas" casando "retintas.com.br")
+        dom_token = any(t in dom for t in nt_dist)
         if dom_token:
             s += 25
         # CONFIRMAÇÃO (simétrica ao Instagram): só aceita se houver sinal FORTE

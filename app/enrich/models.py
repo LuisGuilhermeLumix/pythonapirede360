@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from app.normalize import normalizar
-from app.enrich.scoring import name_tokens
+from app.enrich.scoring import name_tokens, distinctive
 
 
 @dataclass
@@ -115,6 +115,10 @@ class LeadContext:
         for n in self.names():
             toks += name_tokens(n)
         return list(dict.fromkeys(toks))
+
+    def distinctive_tokens(self) -> list[str]:
+        """Tokens de identidade (sem palavras de segmento) — p/ aceitar match."""
+        return distinctive(self.name_tokens())
 
     def phones(self) -> list[str]:
         out = [self.phone_clean]

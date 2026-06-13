@@ -19,10 +19,27 @@ STOPWORDS = {
     "dos", "das", "e", "em", "para", "com",
 }
 
+# Palavras de SEGMENT0 (descrevem o ramo, não a empresa). Servem de sinal fraco
+# no score, mas NÃO valem como identidade p/ aceitar site/@/CNPJ — senão
+# "tintas" casaria retintas.com.br, @daniel_tintas, "Soluções Tintas" etc.
+SEGMENT_WORDS = {
+    "tintas", "tinta", "ferramentas", "ferramenta", "ferragens", "ferragem",
+    "eletrica", "eletricos", "eletrico", "hidraulica", "hidraulico", "pisos",
+    "piso", "revestimentos", "revestimento", "madeiras", "madeira", "madeireira",
+    "acabamentos", "acabamento", "vidracaria", "vidros", "marmoraria", "marmore",
+    "ceramica", "ceramicas", "gesso", "drywall", "esquadrias", "telhas", "blocos",
+    "iluminacao", "tubos", "conexoes", "tintaria",
+}
+
 
 def name_tokens(name: str) -> list[str]:
     """Tokens significativos do nome (>=4 letras, fora das stopwords)."""
     return [t for t in normalizar(name).split() if len(t) >= 4 and t not in STOPWORDS]
+
+
+def distinctive(tokens: list[str]) -> list[str]:
+    """Tokens de IDENTIDADE (tira as palavras de segmento). Usado p/ aceitar match."""
+    return [t for t in tokens if t not in SEGMENT_WORDS]
 
 
 def first_city_token(cidade_norm: str) -> str:

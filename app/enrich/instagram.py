@@ -43,7 +43,7 @@ def _handle_valido(handle: str, nt: list[str]) -> bool:
 
 
 def resolve_instagram(ctx, tools) -> None:
-    nt = ctx.name_tokens()
+    nt = ctx.distinctive_tokens()   # exige nome distintivo (não "tintas")
     # 1) @ do Google Maps é confiável (veio da ficha da loja) — usa direto.
     ig = normalize_instagram(ctx.instagram_maps) if ctx.instagram_maps else ""
     # 2) @ achado no site só vale se for da loja (não de plataforma).
@@ -68,6 +68,7 @@ def _buscar_ig(ctx, tools) -> None:
     base = ctx.title or ctx.receita.get("nome_fantasia") or ""  # nome do Outscraper
     results = tools.search(f"instagram {base} {ctx.city}", max_results=5)
     nt, phones = ctx.name_tokens(), ctx.phones()
+    nt_dist = ctx.distinctive_tokens()
 
     best_handle, best_s = "", 0
     for res in results:
@@ -75,7 +76,7 @@ def _buscar_ig(ctx, tools) -> None:
             handle = m.group(1)
             if handle.lower() in JUNK_HANDLES or len(handle) < 3:
                 continue
-            if not _handle_valido(handle, nt):  # @ tem que ser da loja
+            if not _handle_valido(handle, nt_dist):  # @ tem que ter o nome distintivo
                 continue
             s, _ = score_match(text=res.text(), names_tokens=nt,
                                cidade_norm=ctx.cidade_norm, phones=phones)

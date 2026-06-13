@@ -224,6 +224,46 @@ def test_fallback_cnpjws_convertido():
     assert d["uf"] == "MG" and d["municipio"] == "ALFREDO VASCONCELOS"
 
 
+def test_cnpj_de_outra_empresa_rejeitado():
+    # Caso real: lead "Terraços Tintas" em Alfredo Vasconcelos; a busca acha o
+    # CNPJ de "Soluções Tintas" em PATOS DE MINAS (só casou pela palavra 'tintas').
+    lead = {
+        "title": "TERRAÇOS TINTAS Loja do Marcinho", "city": "Alfredo Vasconcelos",
+        "cidade_normalizada": "alfredo vasconcelos", "state": "MG",
+        "phone_clean": "32998318536", "cadastrar_bitrix": True,
+        "categoria_grupo": "tintas_acabamentos",
+    }
+    receita = {
+        "cnpj": "18809924000107", "razao_social": "SOLUCOES COMERCIO DE TINTAS LTDA",
+        "nome_fantasia": "", "situacao_cadastral": 2, "municipio": "PATOS DE MINAS",
+        "uf": "MG", "qsa": [{"nome_socio": "JOAQUIM ALBERTO"}], "cnae_fiscal": 4744099,
+    }
+    tools = FakeTools(
+        search_map={"cnpj": [SearchResult(title="Soluções Tintas", url="https://x.com",
+                    content="CNPJ 18.809.924/0001-07 tintas em Patos de Minas")]},
+        receita=receita,
+    )
+    out = enrich_lead(lead, tools)
+    assert out["cnpj"] == ""            # CNPJ de outra cidade/empresa rejeitado
+    assert out["razao_social"] == ""
+    assert out["e_icp"] is True         # segue ICP pelo segmento (sem dado errado)
+
+
+def test_instagram_so_com_palavra_de_segmento_rejeitado():
+    lead = {
+        "title": "TERRAÇOS TINTAS Loja do Marcinho", "city": "Alfredo Vasconcelos",
+        "cidade_normalizada": "alfredo vasconcelos", "state": "MG",
+        "phone_clean": "32998318536", "cadastrar_bitrix": True,
+        "categoria_grupo": "tintas_acabamentos",
+    }
+    # busca de IG só acha "@daniel_tintas" (casa por 'tintas', não por Terraços/Marcinho)
+    tools = FakeTools(search_map={"instagram": [SearchResult(
+        title="Daniel Tintas", url="https://instagram.com/daniel_tintas",
+        content="Terraços Tintas Alfredo Vasconcelos instagram.com/daniel_tintas")]})
+    out = enrich_lead(lead, tools)
+    assert out["instagram"] == ""       # @ sem o nome distintivo é rejeitado
+
+
 def test_cnpj_inativo_derruba_icp():
     receita = _receita_ok()
     receita["descricao_situacao_cadastral"] = "BAIXADA"
