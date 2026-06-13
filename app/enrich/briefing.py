@@ -75,8 +75,11 @@ def gerar_briefing_md(dossie: dict, insights: dict | None = None,
     L.append(f"**Segmento** — {seg_txt}")
     L.append(f"**Data:** {hoje}")
     L.append(f"**Classificação:** {emoji} {classe} — Score: {d.get('score_total', 0)}/100")
+    if d.get("revisar"):
+        L.append("> 🔴 **REVISAR ANTES DE ABORDAR — identidade não confirmada:** "
+                 + "; ".join(d.get("revisar_motivos") or []) + ".")
     if d.get("dados_insuficientes"):
-        L.append("> ⚠️ Aprovação provisória (dados de site/Instagram insuficientes) — revisar.")
+        L.append("> 🟡 Qualificação provisória: sem site para confirmar a profundidade do mix.")
     L.append("\n---\n")
 
     # 1. Dados gerais
@@ -177,6 +180,9 @@ def gerar_briefing_md(dossie: dict, insights: dict | None = None,
     conf = d.get("confianca", "baixa")
     L.append(f"- Confiança do enriquecimento: **{conf}** "
              f"({(d.get('consistencia') or {}).get('checks_ok', 0)} cruzamentos confirmados).")
+    if d.get("revisar"):
+        L.append("- 🔴 **Revisar manualmente antes de abordar:** "
+                 + "; ".join(d.get("revisar_motivos") or []) + ".")
     if d.get("erros"):
         L.append(f"- Limitações técnicas: {len(d['erros'])} fonte(s) com falha — revisar manualmente.")
     L.append("- Próximo passo: abordar pelo canal preferencial com a mensagem acima.")

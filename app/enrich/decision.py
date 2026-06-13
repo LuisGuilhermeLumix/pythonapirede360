@@ -80,6 +80,23 @@ def consolidate(ctx) -> dict:
     else:
         conf = "baixa"
 
+    # ----- flag de REVISÃO: identidade não confirmada (o caso perigoso) -----
+    checks = {c["check"]: c["ok"] for c in ctx.cross_checks}
+    revisar, revisar_motivos = False, []
+    if not ctx.cnpj:
+        revisar = True
+        revisar_motivos.append("CNPJ não confirmado na Receita Federal")
+    else:
+        if checks.get("cnpj_cidade_bate") is False:
+            revisar = True
+            revisar_motivos.append("Cidade do CNPJ diverge do Google Maps")
+        if checks.get("cnpj_nome_bate") is False:
+            revisar = True
+            revisar_motivos.append("Razão social não confere com o nome da loja")
+    if conf == "baixa" and not revisar_motivos:
+        revisar = True
+        revisar_motivos.append("Poucas fontes cruzadas — confirmar manualmente")
+
     # ----- contatos consolidados (melhor fonte primeiro) -----
     whatsapp = _melhor_whatsapp([ctx.site_whatsapp, ctx.instagram_business_phone])
     telefone = ctx.phone_clean or ctx.receita.get("telefone", "") or ""
@@ -99,6 +116,8 @@ def consolidate(ctx) -> dict:
         "potencial": icp["potencial"],
         "motivo_icp": icp["motivo_icp"],
         "confianca": conf,
+        "revisar": revisar,
+        "revisar_motivos": revisar_motivos,
         "consistencia": {"checks_ok": ok, "checks_total": len(ctx.cross_checks),
                          "detalhes": ctx.cross_checks},
         # ----- score (7 critérios, do Agent11) -----

@@ -388,6 +388,25 @@ def test_varios_emails_do_site():
     assert not any(".png" in e or "@2x" in e for e in out["emails_site"])
 
 
+def test_flag_revisar_quando_sem_cnpj():
+    out = enrich_lead(_lead(), FakeTools())   # nada retorna -> sem CNPJ
+    assert out["revisar"] is True
+    assert any("CNPJ" in m for m in out["revisar_motivos"])
+    assert "REVISAR ANTES DE ABORDAR" in out["briefing_md"]
+
+
+def test_sem_flag_revisar_com_cnpj_confirmado():
+    lead = {
+        "title": "Casa do Construtor Barbacena", "city": "Barbacena",
+        "cidade_normalizada": "barbacena", "state": "MG", "phone_clean": "3233671430",
+        "cadastrar_bitrix": True, "categoria_grupo": "materiais_construcao",
+        "cnpj_google": CNPJ_VALIDO.replace(".", "").replace("/", "").replace("-", ""),
+    }
+    out = enrich_lead(lead, FakeTools(receita=_receita_ok()))
+    assert out["revisar"] is False         # CNPJ + cidade + nome confirmados
+    assert "REVISAR ANTES DE ABORDAR" not in out["briefing_md"]
+
+
 def test_atacadista_e_reprovado():
     lead = _lead()
     lead["website"] = "https://atacado.com.br"
