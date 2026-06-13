@@ -12,13 +12,15 @@ CNPJ_VALIDO = "11.222.333/0001-81"  # válido nos dígitos verificadores
 
 
 class FakeTools:
-    """Devolve resultados canados conforme palavra-chave da query. Sem rede."""
+    """Devolve resultados canados conforme palavra-chave da query/URL. Sem rede."""
 
-    def __init__(self, search_map=None, receita=None, site_html="", ig=None):
+    def __init__(self, search_map=None, receita=None, site_html="", ig=None,
+                 fetch_map=None):
         self.search_map = search_map or {}
         self.receita_data = receita
         self.site_html = site_html
         self.ig = ig
+        self.fetch_map = fetch_map or {}   # substring da URL -> html
         self.queries = []
 
     def search(self, query, max_results=5):
@@ -32,6 +34,9 @@ class FakeTools:
         return self.receita_data
 
     def fetch_site_text(self, url):
+        for chave, html in self.fetch_map.items():
+            if chave.lower() in (url or "").lower():
+                return html
         return self.site_html
 
     def instagram_profile(self, username):
@@ -162,3 +167,45 @@ def test_nunca_levanta_excecao_com_lixo():
     for lixo in [{}, {"title": None}, {"title": 123, "city": None}]:
         out = enrich_lead(lixo, FakeTools())
         assert "e_icp" in out
+
+
+def test_marcas_rede360_detectadas_no_site():
+    lead = _lead()
+    lead["website"] = "https://casadoprofissional.com.br"  # site direto do Maps
+    tools = FakeTools(site_html="Trabalhamos com Quartzolit, Votorantim e tubos Tigre. Argamassa e cimento.")
+    out = enrich_lead(lead, tools)
+    assert out["vende_marcas_rede360"] is True
+    assert "quartzolit" in out["marcas_rede360"]
+    assert "votorantim" in out["marcas_rede360"]
+    assert any("Vende marcas Rede 360" in m for m in out["icp_motivos"])
+    assert out["confianca"] == "alta"
+
+
+def test_link_da_bio_linktree_extrai_site_e_whatsapp():
+    lead = _lead()
+    lead["instagram"] = "https://www.instagram.com/lojaconstrutor/"
+    tools = FakeTools(
+        ig={"followersCount": 800, "biography": "Materiais", "externalUrl": "https://linktr.ee/lojaconstrutor"},
+        fetch_map={
+            "linktr.ee": '<a href="https://lojaconstrutorreal.com.br">Nosso site</a> '
+                         '<a href="https://wa.me/5532988887777">WhatsApp</a>',
+            "lojaconstrutorreal.com.br": "Loja de materiais — Quartzolit",
+        },
+    )
+    out = enrich_lead(lead, tools)
+    assert out["bio_link"] == "https://linktr.ee/lojaconstrutor"
+    assert out["site_dominio"] == "lojaconstrutorreal.com.br"
+    assert out["whatsapp"] == "5532988887777"
+
+
+def test_link_da_bio_site_direto():
+    lead = _lead()
+    lead["instagram"] = "https://www.instagram.com/loja/"
+    tools = FakeTools(
+        ig={"externalUrl": "https://minhalojareal.com.br", "followersCount": 100},
+        fetch_map={"minhalojareal.com.br": "contato@minhaloja.com.br tubos Tigre"},
+    )
+    out = enrich_lead(lead, tools)
+    assert out["bio_link"] == "https://minhalojareal.com.br"
+    assert out["site_dominio"] == "minhalojareal.com.br"
+    assert out["email"] == "contato@minhaloja.com.br"

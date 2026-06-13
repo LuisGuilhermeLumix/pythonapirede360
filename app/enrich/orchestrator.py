@@ -11,7 +11,7 @@ from app.enrich.models import LeadContext
 from app.enrich.tools import HttpTools
 from app.enrich.cnpj import resolve_cnpj
 from app.enrich.site import resolve_site
-from app.enrich.instagram import resolve_instagram
+from app.enrich.instagram import resolve_instagram, resolve_bio_link
 from app.enrich.decision import consolidate
 
 
@@ -24,7 +24,7 @@ def enrich_lead(lead: dict, tools=None) -> dict:
     tools = tools or default_tools()
     ctx = LeadContext.from_lead(lead)
 
-    for stage in (resolve_cnpj, resolve_site, resolve_instagram):
+    for stage in (resolve_cnpj, resolve_site, resolve_instagram, resolve_bio_link):
         try:
             stage(ctx, tools)
         except Exception as e:  # nenhuma fonte pode derrubar o lead

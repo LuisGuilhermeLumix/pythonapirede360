@@ -62,6 +62,9 @@ class LeadContext:
     marcas: list = field(default_factory=list)
     tem_ecommerce: bool = False
 
+    # ----- Site (conteúdo bruto acumulado, p/ casamento de marcas) -----
+    site_text: str = ""
+
     # ----- Instagram -----
     instagram: str = ""
     instagram_username: str = ""
@@ -70,6 +73,8 @@ class LeadContext:
     instagram_followers: Optional[int] = None
     instagram_bio: str = ""
     instagram_business_phone: str = ""
+    instagram_external_url: str = ""   # link da bio (pode ser site ou Linktree)
+    bio_link: str = ""                 # link da bio já resolvido
 
     # ----- consolidação / rastreio -----
     cross_checks: list = field(default_factory=list)

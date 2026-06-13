@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import re
 
-from app.normalize import normalize_instagram, digits_only
+from app.normalize import normalize_instagram, digits_only, domain_of, normalize_real_site
 from app.enrich.scoring import score_match
+from app.enrich.extract import (
+    is_aggregator, extract_links, pick_real_site, absorver_contatos,
+)
 
 IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
 JUNK_HANDLES = {"p", "reel", "reels", "explore", "stories", "tv", "accounts"}
@@ -86,3 +89,38 @@ def _perfil_ig(ctx, tools) -> None:
     ph = first("businessPhoneNumber", "publicPhoneNumber", "phone")
     if ph:
         ctx.instagram_business_phone = digits_only(ph)
+
+    ext = first("externalUrl", "external_url", "website", "urlInBio")
+    if ext:
+        ctx.instagram_external_url = str(ext).strip()
+
+
+def resolve_bio_link(ctx, tools) -> None:
+    """
+    Segue o link da bio do Instagram. Pode ser o SITE real ou um LINKTREE —
+    neste caso, abre o agregador e pega os links de dentro (site, WhatsApp).
+    Tudo que achar reforça os contatos do dossiê (informação p/ o PDF do SDR).
+    """
+    url = (ctx.instagram_external_url or "").strip()
+    if not url:
+        return
+
+    if is_aggregator(url):
+        ctx.bio_link = url
+        html = tools.fetch_site_text(url)
+        site = pick_real_site(extract_links(html))
+        if site and not ctx.site:
+            ctx.site = site
+            ctx.site_domain = domain_of(site)
+            ctx.site_source = "instagram_linktree"
+            absorver_contatos(ctx, tools.fetch_site_text(site))
+        absorver_contatos(ctx, html)  # WhatsApp/telefone direto no Linktree
+    else:
+        real = normalize_real_site(url)
+        if real:
+            ctx.bio_link = real
+            if not ctx.site:
+                ctx.site = real
+                ctx.site_domain = domain_of(real)
+                ctx.site_source = "instagram_bio"
+            absorver_contatos(ctx, tools.fetch_site_text(real))

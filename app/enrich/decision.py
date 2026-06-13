@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from app.normalize import normalizar
 from app.enrich.scoring import first_city_token
+from app.enrich.catalogo_rede360 import match_catalogo
 
 # CNAEs de materiais de construção (alvo) e prefixos claramente fora do segmento.
 CNAE_ALVO = {
@@ -67,9 +68,16 @@ def consolidate(ctx) -> dict:
     if e_icp and not motivos:
         motivos.append("Segmento confirmado pela categoria do Google Maps")
 
+    # ----- comparação com o catálogo da Rede 360 (sinal forte de ICP) -----
+    match = match_catalogo(ctx.marcas, ctx.produtos, ctx.site_text)
+    if match["vende_marcas_rede360"] and e_icp:
+        motivos.append("Vende marcas Rede 360: " + ", ".join(match["marcas_rede360"]))
+
     # ----- confiança (quantas fontes concordam) -----
     ok = sum(1 for c in ctx.cross_checks if c["ok"])
-    if ctx.cnpj and ctx.site and ok >= 2:
+    if match["vende_marcas_rede360"] and (ctx.cnpj or ctx.site):
+        conf = "alta"
+    elif ctx.cnpj and ctx.site and ok >= 2:
         conf = "alta"
     elif ctx.cnpj or ctx.site or ctx.instagram:
         conf = "media"
@@ -108,10 +116,17 @@ def consolidate(ctx) -> dict:
         "instagram": ctx.instagram,
         "instagram_username": ctx.instagram_username,
         "instagram_seguidores": ctx.instagram_followers,
-        # comercial
+        # comercial (informação rica p/ o PDF do SDR)
         "produtos": ctx.produtos,
         "marcas": ctx.marcas,
         "tem_ecommerce": ctx.tem_ecommerce,
+        "vende_marcas_rede360": match["vende_marcas_rede360"],
+        "marcas_rede360": match["marcas_rede360"],
+        "categorias_rede360": match["categorias_rede360"],
+        "match_rede360_score": match["score"],
+        "telefones_site": ctx.site_phones,
+        "instagram_bio": ctx.instagram_bio,
+        "bio_link": ctx.bio_link,
         # endereço
         "endereco": _montar_endereco(ctx),
         "cidade": ctx.city,

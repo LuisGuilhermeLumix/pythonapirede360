@@ -8,18 +8,11 @@ pela mesma regra do normalize.
 """
 from __future__ import annotations
 
-import re
-
-from app.normalize import (
-    normalize_real_site, domain_of, digits_only, EMAIL_DOMINIOS_BLOQUEADOS,
-)
+from app.normalize import normalize_real_site, domain_of, digits_only
 from app.enrich.scoring import score_match
 from app.enrich.llm import extract_site_intel
+from app.enrich.extract import absorver_contatos
 
-IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
-WA_RX = re.compile(r"(?:wa\.me/|api\.whatsapp\.com/send\?phone=)(\+?\d{10,13})", re.I)
-MAIL_RX = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
-TEL_RX = re.compile(r"(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-\s]?\d{4}")
 LIMIAR_SITE = 25
 
 
@@ -60,35 +53,13 @@ def _buscar_site(ctx, tools) -> None:
         ctx.site_source, ctx.site_score = "tavily", best_s
 
 
-def _mail_plataforma(mail: str) -> bool:
-    dom = mail.split("@", 1)[1].lower() if "@" in mail else ""
-    return dom in EMAIL_DOMINIOS_BLOQUEADOS
-
-
 def _extrair_do_site(ctx, tools) -> None:
     html = tools.fetch_site_text(ctx.site)
     if not html:
         return
 
-    phones = []
-    for m in TEL_RX.finditer(html):
-        d = digits_only(m.group(0))
-        if len(d) >= 10:
-            phones.append(d[-11:] if len(d) > 11 else d)
-    ctx.site_phones = list(dict.fromkeys(phones))[:5]
-
-    mail = MAIL_RX.search(html)
-    if mail and not _mail_plataforma(mail.group(0)):
-        ctx.site_email = mail.group(0).lower()
-
-    wa = WA_RX.search(html)
-    if wa:
-        ctx.site_whatsapp = digits_only(wa.group(1))
-
-    ig = IG_RX.search(html)
-    if ig and not ctx.instagram_maps:
-        # deixa pista p/ o resolver de Instagram (contexto compartilhado)
-        ctx.raw_lead["_site_instagram"] = ig.group(1)
+    # contatos + acúmulo do texto p/ casamento de marcas (extrator compartilhado)
+    absorver_contatos(ctx, html)
 
     # cruzamento: o telefone do site bate com o do Maps?
     if ctx.phone_clean and ctx.site_phones:
