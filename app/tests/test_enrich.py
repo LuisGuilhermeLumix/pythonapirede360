@@ -370,6 +370,24 @@ def test_solutudo_nao_contamina():
     assert out["e_icp"] is True                   # segue ICP pelo segmento
 
 
+def test_varios_emails_do_site():
+    lead = _lead()
+    lead["website"] = "https://construtorbarbacena.com.br"
+    tools = FakeTools(
+        search_map={"site oficial": [SearchResult(
+            title="Construtor", url="https://construtorbarbacena.com.br",
+            content="loja")]},
+        site_html=("Fale conosco: vendas@construtor.com.br, financeiro@construtor.com.br "
+                   "e orcamento@construtor.com.br. sprite logo@2x.png banner.jpg"),
+    )
+    out = enrich_lead(lead, tools)
+    assert out["email"] == "vendas@construtor.com.br"          # principal
+    assert "financeiro@construtor.com.br" in out["emails_site"]
+    assert "orcamento@construtor.com.br" in out["emails_site"]
+    # lixo de asset não entra
+    assert not any(".png" in e or "@2x" in e for e in out["emails_site"])
+
+
 def test_atacadista_e_reprovado():
     lead = _lead()
     lead["website"] = "https://atacado.com.br"

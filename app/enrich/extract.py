@@ -35,13 +35,21 @@ def is_aggregator(url: str) -> bool:
     return any(a in d for a in AGREGADORES)
 
 
+# Falsos e-mails comuns em HTML: nomes de arquivo/assets e sprites @2x.
+_EMAIL_JUNK = re.compile(r"\.(png|jpe?g|gif|svg|webp|css|js|woff2?|ico)$|@\d+x$", re.I)
+
+
 def _mail_plataforma(mail: str) -> bool:
     dom = mail.split("@", 1)[1].lower() if "@" in mail else ""
     return dom in EMAIL_DOMINIOS_BLOQUEADOS
 
 
+def _email_ok(e: str) -> bool:
+    return bool(e) and not _mail_plataforma(e) and not _EMAIL_JUNK.search(e)
+
+
 def extract_contacts(html: str) -> dict:
-    """Telefones, WhatsApp, e-mail e @ de Instagram de um HTML/texto."""
+    """Telefones, WhatsApp, TODOS os e-mails e @ de Instagram de um HTML/texto."""
     html = html or ""
     phones = []
     for m in TEL_RX.finditer(html):
@@ -49,17 +57,20 @@ def extract_contacts(html: str) -> dict:
         if len(d) >= 10:
             phones.append(d[-11:] if len(d) > 11 else d)
 
+    emails: list[str] = []
+    for m in MAIL_RX.finditer(html):
+        e = m.group(0).lower()
+        if _email_ok(e) and e not in emails:
+            emails.append(e)
+
     wa = WA_RX.search(html)
-    mail = MAIL_RX.search(html)
     ig = IG_RX.search(html)
-    email = mail.group(0).lower() if mail else ""
-    if email and _mail_plataforma(email):
-        email = ""
 
     return {
         "phones": list(dict.fromkeys(phones))[:8],
         "whatsapp": digits_only(wa.group(1)) if wa else "",
-        "email": email,
+        "email": emails[0] if emails else "",
+        "emails": emails[:8],
         "instagram": ig.group(1) if ig else "",
     }
 
@@ -111,8 +122,11 @@ def absorver_contatos(ctx, html: str, max_text: int = 200_000) -> None:
         ctx.site_phones = list(dict.fromkeys((ctx.site_phones or []) + c["phones"]))[:8]
     if not ctx.site_whatsapp and c["whatsapp"]:
         ctx.site_whatsapp = c["whatsapp"]
-    if not ctx.site_email and c["email"]:
-        ctx.site_email = c["email"]
+    for e in c.get("emails", []):
+        if e and e not in ctx.site_emails:
+            ctx.site_emails.append(e)
+    if not ctx.site_email and ctx.site_emails:
+        ctx.site_email = ctx.site_emails[0]
     if c["instagram"] and not ctx.instagram_maps and not ctx.raw_lead.get("_site_instagram"):
         ctx.raw_lead["_site_instagram"] = c["instagram"]
     ctx.site_text = (ctx.site_text + " " + html)[:max_text]

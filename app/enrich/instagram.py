@@ -125,8 +125,11 @@ def _perfil_ig(ctx, tools) -> None:
     for p in bio_c["phones"]:
         if p and p not in ctx.site_phones:
             ctx.site_phones.append(p)
-    if not ctx.site_email and bio_c["email"]:
-        ctx.site_email = bio_c["email"]
+    for e in bio_c.get("emails", []):
+        if e and e not in ctx.site_emails:
+            ctx.site_emails.append(e)
+    if not ctx.site_email and ctx.site_emails:
+        ctx.site_email = ctx.site_emails[0]
 
     # coleta TODOS os links da bio (externalUrl, externalUrls, bioLinks...)
     links: list[str] = []

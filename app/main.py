@@ -31,7 +31,7 @@ from app.enrich.orchestrator import enrich_lead
 logger = logging.getLogger("rede360")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Rede 360 — Lead Processor", version="2.8.0")
+app = FastAPI(title="Rede 360 — Lead Processor", version="2.9.0")
 
 API_KEY = os.getenv("API_KEY", "")
 
@@ -104,7 +104,7 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.8.0"}
+    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.9.0"}
 
 
 @app.post("/process", response_model=LeadOut)

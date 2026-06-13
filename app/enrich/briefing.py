@@ -93,6 +93,8 @@ def gerar_briefing_md(dossie: dict, insights: dict | None = None,
     if d.get("telefones_site"):
         L.append(f"| Outros telefones | {', '.join(d['telefones_site'])} |")
     L.append(f"| E-mail | {_v(d.get('email'))} |")
+    if d.get("emails_site"):
+        L.append(f"| Outros e-mails | {', '.join(d['emails_site'])} |")
     L.append(f"| Site | {_v(d.get('site'))} |")
     ig = d.get("instagram")
     seg_ig = f" ({d.get('instagram_seguidores')} seguidores)" if d.get("instagram_seguidores") else ""

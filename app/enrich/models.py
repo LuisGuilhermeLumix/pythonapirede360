@@ -57,6 +57,7 @@ class LeadContext:
     site_score: int = 0
     site_phones: list = field(default_factory=list)
     site_email: str = ""
+    site_emails: list = field(default_factory=list)
     site_whatsapp: str = ""
     produtos: list = field(default_factory=list)
     marcas: list = field(default_factory=list)

@@ -88,6 +88,8 @@ def consolidate(ctx) -> dict:
     _princ = {normalize_phone(telefone), normalize_phone(whatsapp)}
     telefones_extra = [p for p in (ctx.site_phones or [])
                        if normalize_phone(p) and normalize_phone(p) not in _princ]
+    # e-mails extras (vendas, financeiro, orçamento...) — tira o principal
+    emails_extra = [e for e in (ctx.site_emails or []) if e and e != email]
 
     return {
         # ----- decisão / qualificação -----
@@ -118,6 +120,7 @@ def consolidate(ctx) -> dict:
         "telefone": telefone,
         "whatsapp": whatsapp,
         "email": email,
+        "emails_site": emails_extra,
         "telefones_site": telefones_extra,
         "site": ctx.site,
         "site_dominio": ctx.site_domain,
