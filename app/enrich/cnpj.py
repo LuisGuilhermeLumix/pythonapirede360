@@ -8,6 +8,7 @@ CNAE no contexto — dados que Site e Instagram vão reaproveitar.
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from app.normalize import is_valid_cnpj, digits_only, normalizar
@@ -15,6 +16,7 @@ from app.enrich.scoring import score_match, first_city_token, name_tokens, disti
 
 CNPJ_RX = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")
 LIMIAR_CNPJ = 30
+log = logging.getLogger("rede360.cnpj")
 
 
 def resolve_cnpj(ctx, tools) -> None:
@@ -141,6 +143,12 @@ def _consultar_receita(ctx, tools) -> None:
     # REJEITA CNPJ achado por BUSCA que é claramente outra empresa
     # (cidade diferente E nome distintivo não bate). Melhor sem CNPJ do que errado.
     if ctx.cnpj_source != "maps" and not city_ok and not name_ok:
+        log.info("CNPJ %s REJEITADO (outra empresa) p/ '%s' -> %s / %s",
+                 ctx.cnpj, ctx.title, ctx.receita["municipio"], ctx.receita["razao_social"])
         ctx.add_check("cnpj_rejeitado", True,
                       f"Outra empresa? {ctx.receita['municipio']} / {ctx.receita['razao_social']}")
         ctx.cnpj, ctx.cnpj_source, ctx.cnpj_score, ctx.receita = "", "", 0, {}
+        return
+    log.info("CNPJ %s OK p/ '%s' (%s, %s) cidade_bate=%s nome_bate=%s",
+             ctx.cnpj, ctx.title, ctx.receita["razao_social"], ctx.receita["situacao"],
+             city_ok, name_ok)

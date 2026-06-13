@@ -7,12 +7,17 @@ registra o erro e segue — o lead nunca se perde por causa de uma fonte.
 """
 from __future__ import annotations
 
+import logging
+
 from app.enrich.models import LeadContext
 from app.enrich.tools import HttpTools
 from app.enrich.cnpj import resolve_cnpj
 from app.enrich.site import resolve_site
 from app.enrich.instagram import resolve_instagram, resolve_bio_link
 from app.enrich.decision import consolidate
+
+
+log = logging.getLogger("rede360.enrich")
 
 
 def default_tools():
@@ -51,4 +56,13 @@ def enrich_lead(lead: dict, tools=None) -> dict:
         dossie["briefing_html"] = ""
         dossie.setdefault("erros", []).append(f"briefing: {type(e).__name__}: {e}")
 
+    # resumo analisável (1 linha por lead) na VPS
+    log.info(
+        "ENRICH %-36s icp=%-5s conf=%-5s pot=%-6s cnpj=%-14s site=%-24s ig=%-20s forn=[%s] revisar=%s%s",
+        str(ctx.title or "")[:36], dossie.get("e_icp"), dossie.get("confianca"),
+        dossie.get("potencial") or "-", dossie.get("cnpj") or "-",
+        dossie.get("site_dominio") or "-", dossie.get("instagram_username") or "-",
+        ",".join(dossie.get("fornecedores_rede360") or []), dossie.get("revisar"),
+        (" ERROS=" + str(ctx.errors)) if ctx.errors else "",
+    )
     return dossie

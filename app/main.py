@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
@@ -28,10 +29,18 @@ from app.normalize import normalizar_lote
 from app.scoring import avaliar_lote, PesosICP, LIMIAR_ENRIQUECER
 from app.enrich.orchestrator import enrich_lead
 
+# Logging próprio que SEMPRE escreve no stdout (uvicorn já configura o root, então
+# basicConfig viraria no-op). Nível via env LOG_LEVEL (INFO default, DEBUG p/ tudo).
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger("rede360")
-logging.basicConfig(level=logging.INFO)
+if not logger.handlers:
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s | %(message)s", "%H:%M:%S"))
+    logger.addHandler(_h)
+logger.setLevel(LOG_LEVEL)
+logger.propagate = False
 
-app = FastAPI(title="Rede 360 — Lead Processor", version="2.10.0")
+app = FastAPI(title="Rede 360 — Lead Processor", version="2.11.0")
 
 API_KEY = os.getenv("API_KEY", "")
 
@@ -91,6 +100,11 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
     leads = normalizar_lote(payload, cidade_base=cidade, categoria=categoria)
     scored = avaliar_lote(leads, PesosICP(), limiar_enriquecer=lim)
 
+    rec = _contar_recebido(payload)
+    icp = sum(1 for r in scored if r["cadastrar_bitrix"])
+    logger.info("PROCESS cidade=%r recebidos=%s normalizados=%s icp=%s descartados=%s",
+                cidade or "-", rec, len(leads), icp, len(scored) - icp)
+
     return {
         "leads": scored,
         "total_recebido": _contar_recebido(payload),
@@ -104,7 +118,7 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.10.0"}
+    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.11.0"}
 
 
 @app.post("/process", response_model=LeadOut)
