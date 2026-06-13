@@ -198,6 +198,21 @@ def test_categorias_confirmadas_do_mix():
     assert out["classificacao"] in ("Quente", "Morno", "Frio")
 
 
+def test_briefing_md_gerado():
+    lead = _lead()
+    lead["website"] = "https://casadoprofissional.com.br"
+    tools = FakeTools(site_html="tubos e conexoes Tigre; tintas e verniz Eucatex; cimento")
+    out = enrich_lead(lead, tools)
+    md = out["briefing_md"]
+    assert md.startswith("# BRIEFING COMERCIAL")
+    assert "Casa do Construtor Barbacena" in md
+    assert "### 5. SCORE DE QUALIFICAÇÃO" in md
+    assert "Rede 360" in md
+    # seção 4.2 com fornecedor detectado
+    assert "Tigre" in md
+    assert "ESTRATÉGIA DE ABORDAGEM" in md
+
+
 def test_atacadista_e_reprovado():
     lead = _lead()
     lead["website"] = "https://atacado.com.br"

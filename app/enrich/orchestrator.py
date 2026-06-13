@@ -31,7 +31,7 @@ def enrich_lead(lead: dict, tools=None) -> dict:
             ctx.errors.append(f"{stage.__name__}: {type(e).__name__}: {e}")
 
     try:
-        return consolidate(ctx)
+        dossie = consolidate(ctx)
     except Exception as e:
         return {
             "e_icp": ctx.cadastrar_bitrix,
@@ -40,3 +40,13 @@ def enrich_lead(lead: dict, tools=None) -> dict:
             "confianca": "baixa",
             "erros": ctx.errors + [f"consolidate: {type(e).__name__}: {e}"],
         }
+
+    # briefing markdown p/ o PDF do SDR (não pode derrubar o enriquecimento)
+    try:
+        from app.enrich.briefing import gerar_briefing_md
+        dossie["briefing_md"] = gerar_briefing_md(dossie)
+    except Exception as e:
+        dossie["briefing_md"] = ""
+        dossie.setdefault("erros", []).append(f"briefing: {type(e).__name__}: {e}")
+
+    return dossie
