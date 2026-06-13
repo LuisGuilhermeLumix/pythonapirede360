@@ -132,16 +132,42 @@ class HttpTools:
         logger.warning("CNPJ %s: BrasilAPI e cnpj.ws falharam", d)
         return None
 
-    # ----- conteúdo do site (fetch direto, grátis) -----
+    # ----- conteúdo do site -----
     def fetch_site_text(self, url: str) -> str:
+        """
+        1) fetch direto com UA de navegador (grátis);
+        2) se falhar/bloquear (403, anti-bot — ex.: lojanogueira.com.br), cai no
+           Tavily /extract, que RENDERIZA a página e contorna o bloqueio.
+        """
         if not url:
             return ""
+        # 1) fetch direto
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Rede360Bot)"})
+            req = urllib.request.Request(url, headers={
+                "User-Agent": _UA,
+                "Accept": "text/html,application/xhtml+xml,*/*",
+                "Accept-Encoding": "identity",
+                "Accept-Language": "pt-BR,pt;q=0.9",
+            })
             with urllib.request.urlopen(req, timeout=15) as resp:
-                return resp.read(800_000).decode("utf-8", "replace")
-        except Exception:
-            return ""
+                html = resp.read(800_000).decode("utf-8", "replace")
+            if html.strip():
+                return html
+        except Exception as e:
+            logger.info("fetch direto falhou em %s (%s) — tentando Tavily extract",
+                        url[:70], type(e).__name__)
+
+        # 2) fallback: Tavily extract (renderiza, contorna anti-bot)
+        if self.tavily_key:
+            resp = _http("POST", "https://api.tavily.com/extract", body={
+                "api_key": self.tavily_key, "urls": [url],
+            }, timeout=45)
+            if isinstance(resp, dict):
+                for r in (resp.get("results") or []):
+                    rc = (r.get("raw_content") or r.get("content") or "")
+                    if rc.strip():
+                        return rc
+        return ""
 
     # ----- perfil do Instagram via Apify (run-sync, sem polling) -----
     def instagram_profile(self, username: str) -> dict | None:
