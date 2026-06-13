@@ -149,6 +149,56 @@ def test_cnae_bloqueado_derruba_icp():
     assert "fora do segmento" in out["motivo_icp"]
 
 
+def _receita_brasilapi():
+    """Formato REAL da BrasilAPI v1 (situacao por código, qsa vazio)."""
+    return {
+        "cnpj": "18693875000181",
+        "razao_social": "PRESLEY EDUARDO TEIXEIRA",
+        "nome_fantasia": "CASA DO PROFISSIONAL",
+        "cnae_fiscal": 4744099,
+        "cnaes_secundarios": [{"codigo": 2599302, "descricao": "Corte e dobra"}],
+        "situacao_cadastral": 2,                 # código (2 = ATIVA), sem descrição
+        "natureza_juridica": "Empresário (Individual)",
+        "qsa": [],
+        "uf": "MG", "municipio": "ALFREDO VASCONCELOS",
+        "capital_social": 20000, "descricao_porte": "EMPRESA DE PEQUENO PORTE",
+        "ddd_telefone_1": "",
+    }
+
+
+def test_brasilapi_situacao_por_codigo_e_decisor_individual():
+    lead = {
+        "title": "Casa do Profissional Material de Construcao",
+        "city": "Alfredo Vasconcelos", "cidade_normalizada": "alfredo vasconcelos",
+        "state": "MG", "phone_clean": "32991423501", "cadastrar_bitrix": True,
+        "categoria_grupo": "materiais_construcao", "cnpj_google": "18693875000181",
+    }
+    out = enrich_lead(lead, FakeTools(receita=_receita_brasilapi()))
+    assert out["cnpj"] == "18693875000181"
+    assert out["razao_social"] == "PRESLEY EDUARDO TEIXEIRA"
+    assert out["situacao_cadastral"] == "ATIVA"                  # código 2 -> ATIVA
+    assert out["decisor"]["nome"] == "PRESLEY EDUARDO TEIXEIRA"  # Empresário Individual
+    assert out["e_icp"] is True
+
+
+def test_whatsapp_da_bio_do_instagram():
+    lead = {
+        "title": "Casa do Profissional", "city": "Alfredo Vasconcelos",
+        "cidade_normalizada": "alfredo vasconcelos", "state": "MG",
+        "phone_clean": "32991423501", "cadastrar_bitrix": True,
+        "categoria_grupo": "materiais_construcao",
+        "instagram": "https://www.instagram.com/casadoprofissionalmg/",
+    }
+    tools = FakeTools(ig={
+        "biography": "Material de Construcao e Madeiras em Geral\nWhatsapp 32 99142-3501\nTelefone 32 3367-1143",
+        "followersCount": 2806,
+        "externalUrl": "https://wa.me/5532991423501",
+    })
+    out = enrich_lead(lead, tools)
+    assert out["instagram_seguidores"] == 2806
+    assert "32991423501" in out["whatsapp"]      # WhatsApp da bio capturado
+
+
 def test_cnpj_inativo_derruba_icp():
     receita = _receita_ok()
     receita["descricao_situacao_cadastral"] = "BAIXADA"

@@ -74,6 +74,7 @@ class LeadContext:
     instagram_bio: str = ""
     instagram_business_phone: str = ""
     instagram_external_url: str = ""   # link da bio (pode ser site ou Linktree)
+    instagram_links: list = field(default_factory=list)  # TODOS os links da bio
     bio_link: str = ""                 # link da bio já resolvido
 
     # ----- consolidação / rastreio -----

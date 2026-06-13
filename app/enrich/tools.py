@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.request
 
 from app.normalize import digits_only
@@ -73,8 +74,14 @@ class HttpTools:
         d = digits_only(cnpj)
         if len(d) != 14:
             return None
-        resp = _http("GET", f"https://brasilapi.com.br/api/cnpj/v1/{d}", timeout=20)
-        return resp if isinstance(resp, dict) else None
+        # BrasilAPI é flaky (timeout/429) — tenta até 3x antes de desistir.
+        for tentativa in range(3):
+            resp = _http("GET", f"https://brasilapi.com.br/api/cnpj/v1/{d}", timeout=25)
+            if isinstance(resp, dict) and resp.get("cnpj"):
+                return resp
+            if tentativa < 2:
+                time.sleep(1.2)
+        return None
 
     # ----- conteúdo do site (fetch direto, grátis) -----
     def fetch_site_text(self, url: str) -> str:

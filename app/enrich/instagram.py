@@ -13,6 +13,7 @@ from app.normalize import normalize_instagram, digits_only, domain_of, normalize
 from app.enrich.scoring import score_match
 from app.enrich.extract import (
     is_aggregator, extract_links, pick_real_site, absorver_contatos,
+    whatsapp_from_text, whatsapp_from_link,
 )
 
 IG_RX = re.compile(r"instagram\.com/([A-Za-z0-9._]+)", re.I)
@@ -112,37 +113,67 @@ def _perfil_ig(ctx, tools) -> None:
     if ph:
         ctx.instagram_business_phone = digits_only(ph)
 
+    # WhatsApp citado no TEXTO da bio ("Whatsapp 32 99142-3501")
+    if not ctx.instagram_business_phone:
+        wa = whatsapp_from_text(ctx.instagram_bio)
+        if wa:
+            ctx.instagram_business_phone = wa
+
+    # coleta TODOS os links da bio (externalUrl, externalUrls, bioLinks...)
+    links: list[str] = []
     ext = first("externalUrl", "external_url", "website", "urlInBio")
     if ext:
-        ctx.instagram_external_url = str(ext).strip()
+        links.append(str(ext))
+    for key in ("externalUrls", "bioLinks", "links"):
+        v = prof.get(key)
+        if isinstance(v, list):
+            for it in v:
+                if isinstance(it, str):
+                    links.append(it)
+                elif isinstance(it, dict):
+                    u = it.get("url") or it.get("link") or it.get("href")
+                    if u:
+                        links.append(str(u))
+    ctx.instagram_links = [l for l in dict.fromkeys(x.strip() for x in links) if l]
+    ctx.instagram_external_url = ctx.instagram_links[0] if ctx.instagram_links else ""
 
 
 def resolve_bio_link(ctx, tools) -> None:
     """
-    Segue o link da bio do Instagram. Pode ser o SITE real ou um LINKTREE —
-    neste caso, abre o agregador e pega os links de dentro (site, WhatsApp).
-    Tudo que achar reforça os contatos do dossiê (informação p/ o PDF do SDR).
+    Processa TODOS os links da bio do Instagram:
+      - wa.me / WhatsApp  -> extrai o número (era o que faltava no caso real);
+      - Linktree/agregador -> abre e pega os links de dentro;
+      - site real          -> adota e extrai contatos.
     """
-    url = (ctx.instagram_external_url or "").strip()
-    if not url:
-        return
+    links = ctx.instagram_links or ([ctx.instagram_external_url] if ctx.instagram_external_url else [])
+    for url in links:
+        url = (url or "").strip()
+        if not url:
+            continue
 
-    if is_aggregator(url):
-        ctx.bio_link = url
-        html = tools.fetch_site_text(url)
-        site = pick_real_site(extract_links(html))
-        if site and not ctx.site:
-            ctx.site = site
-            ctx.site_domain = domain_of(site)
-            ctx.site_source = "instagram_linktree"
-            absorver_contatos(ctx, tools.fetch_site_text(site))
-        absorver_contatos(ctx, html)  # WhatsApp/telefone direto no Linktree
-    else:
+        wa = whatsapp_from_link(url)
+        if wa:
+            if not ctx.site_whatsapp:
+                ctx.site_whatsapp = wa
+            continue
+
+        if is_aggregator(url):
+            ctx.bio_link = ctx.bio_link or url
+            html = tools.fetch_site_text(url)
+            site = pick_real_site(extract_links(html))
+            if site and not ctx.site:
+                ctx.site = site
+                ctx.site_domain = domain_of(site)
+                ctx.site_source = "instagram_linktree"
+                absorver_contatos(ctx, tools.fetch_site_text(site))
+            absorver_contatos(ctx, html)  # WhatsApp/telefone direto no Linktree
+            continue
+
         real = normalize_real_site(url)
         if real:
-            ctx.bio_link = real
+            ctx.bio_link = ctx.bio_link or real
             if not ctx.site:
                 ctx.site = real
                 ctx.site_domain = domain_of(real)
                 ctx.site_source = "instagram_bio"
-            absorver_contatos(ctx, tools.fetch_site_text(real))
+                absorver_contatos(ctx, tools.fetch_site_text(real))

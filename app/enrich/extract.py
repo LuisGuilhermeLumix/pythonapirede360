@@ -16,6 +16,8 @@ from app.normalize import (
 WA_RX = re.compile(
     r"(?:wa\.me/|api\.whatsapp\.com/send\?phone=|whatsapp\.com/send\?phone=)(\+?\d{10,13})", re.I
 )
+# "Whatsapp 32 99142-3501", "zap (32) 99142-3501", "wpp: 3299142-3501"
+WA_TEXT_RX = re.compile(r"(?:whats?app|whats|wpp|zap)\b[\s:.\-]*(\+?[\d][\d\s().\-]{8,16})", re.I)
 MAIL_RX = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 TEL_RX = re.compile(r"(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-\s]?\d{4}")
 HREF_RX = re.compile(r'href=["\']([^"\']+)["\']', re.I)
@@ -60,6 +62,25 @@ def extract_contacts(html: str) -> dict:
         "email": email,
         "instagram": ig.group(1) if ig else "",
     }
+
+
+def whatsapp_from_text(text: str) -> str:
+    """Pega o WhatsApp citado em texto (ex.: bio do Instagram 'Whatsapp 32 ...')."""
+    m = WA_RX.search(text or "")
+    if m:
+        return digits_only(m.group(1))
+    m = WA_TEXT_RX.search(text or "")
+    if m:
+        d = digits_only(m.group(1))
+        if 10 <= len(d) <= 13:
+            return d
+    return ""
+
+
+def whatsapp_from_link(url: str) -> str:
+    """Número de um link wa.me / api.whatsapp."""
+    m = WA_RX.search(url or "")
+    return digits_only(m.group(1)) if m else ""
 
 
 def extract_links(html: str) -> list[str]:
