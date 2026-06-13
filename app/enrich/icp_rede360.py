@@ -71,7 +71,7 @@ def _score_breakdown(ctx, match, situacao: str) -> dict:
     }
 
 
-def avaliar_icp(ctx, match, situacao: str, cnae_alvo: bool, cnae_block: bool) -> dict:
+def avaliar_icp(ctx, match, situacao: str, cnae: dict) -> dict:
     motivos: list[str] = []
     categorias = match["categorias_confirmadas"]
     segmentos = list(categorias.keys())
@@ -90,17 +90,22 @@ def avaliar_icp(ctx, match, situacao: str, cnae_alvo: bool, cnae_block: bool) ->
     if situacao and situacao != "ATIVA":
         e_icp = False
         motivos.append(f"CNPJ {situacao} na Receita")
-    elif cnae_block:
+    elif cnae["block"]:
         e_icp = False
         motivos.append("CNAE fora do segmento de materiais de construção")
     elif match["e_atacadista"]:
         e_icp = False
         motivos.append("Atacadista/distribuidor — vende para lojas, não varejo (Passo 1b)")
+    elif cnae["tem"] and not cnae["construcao"]:
+        # CNPJ confirmado de OUTRO setor (farmácia, alimentos, correios, prefeitura,
+        # transporte...) — o CNAE manda sobre a categoria do Google Maps.
+        e_icp = False
+        motivos.append(f"Setor fora de materiais de construção (CNAE {cnae['str']})")
     else:
         # ----- PASSO 2/3 + FALLBACK -----
         if not tem_dados:
             # sem site/Instagram: aprova provisório pelo segmento (Maps/CNAE)
-            e_icp = bool(ctx.cadastrar_bitrix or cnae_alvo)
+            e_icp = bool(ctx.cadastrar_bitrix or cnae["alvo"] or cnae["construcao"])
             dados_insuficientes = True
             if ctx.categoria_grupo:
                 segmentos = [ctx.categoria_grupo]
@@ -109,7 +114,7 @@ def avaliar_icp(ctx, match, situacao: str, cnae_alvo: bool, cnae_block: bool) ->
         elif n_cat >= 3:
             motivos.append("Categorias confirmadas com evidência: " + ", ".join(
                 f"{c} ({', '.join(categorias[c][:2])})" for c in segmentos[:4]))
-        elif ctx.cadastrar_bitrix or cnae_alvo:
+        elif ctx.cadastrar_bitrix or cnae["alvo"] or cnae["construcao"]:
             # do segmento, mas profundidade rasa — entra como potencial baixo
             motivos.append(f"Do segmento, mas só {n_cat} categoria(s) confirmada(s) — "
                            "profundidade de mix baixa.")

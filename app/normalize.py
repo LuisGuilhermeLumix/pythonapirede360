@@ -42,12 +42,16 @@ PLATAFORMA_DOMINIOS = {
     "cnpj.info", "receitaws.com.br", "empresaqui.com.br", "consultar.com.br",
     "listamais.com.br", "vumetro.com.br", "guialocal.com.br", "consultae.com.br",
     "cnpjs.rocks", "consultapublica.com.br",
+    # encurtadores de URL — não são o site da loja
+    "cutt.ly", "bit.ly", "goo.gl", "t.co", "tinyurl.com", "encurtador.com.br",
+    "abrir.link", "rebrand.ly", "short.io", "linktw.in", "l1nk.dev",
 }
 
 SOCIAL_JUNK_DOMINIOS = {
     "instagram.com", "facebook.com", "fb.com", "wa.me", "api.whatsapp.com",
-    "maps.google.com", "google.com", "g.page", "twitter.com", "x.com",
-    "linkedin.com", "youtube.com", "tiktok.com",
+    "whatsapp.com", "chat.whatsapp.com",
+    "maps.google.com", "google.com", "googleapis.com", "gstatic.com",
+    "g.page", "twitter.com", "x.com", "linkedin.com", "youtube.com", "tiktok.com",
 }
 
 # E-mails genéricos/placeholder que não pertencem à loja.
@@ -77,6 +81,12 @@ CATEGORIAS_BLOQUEADAS = [
     "loja de moveis", "loja de presentes", "floricultura", "pet shop",
     "banho e tosa", "forum", "presidio", "prefeitura", "camara municipal",
     "cartorio", "delegacia", "escola", "creche", "igreja",
+    # adicionados após análise de log real (Alfredo Vasconcelos)
+    "acougue", "casa de carnes", "boutique de carnes", "frigorifico",
+    "frutas", "hortifruti", "quitanda", "agencia dos correios", "correios",
+    "paroquia", "capela", "transportadora", "artigos para festas",
+    "concessionaria", "loja de veiculos", "autopecas", "agencia de viagens",
+    "loja de conveniencia", "distribuidora de bebidas", "sorveteria", "bar",
 ]
 
 # Categorias do Google que CONTAM como ICP (grupo -> termos).

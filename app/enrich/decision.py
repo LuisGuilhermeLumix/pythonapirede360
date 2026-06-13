@@ -26,17 +26,27 @@ CNAE_ALVO = {
     "4744001", "4744002", "4744003", "4744004", "4744005", "4744099",
     "4742300", "4741500", "4759801",
 }
+# Prefixos de CNAE de COMÉRCIO/MATERIAIS de construção (varejo e atacado).
+CNAE_CONSTRUCAO_PREFIX = (
+    "4741", "4742", "4743", "4744", "4754", "4759",       # varejo construção/tintas/elétrico/vidro/móveis
+    "4671", "4672", "4673", "4674", "4679",               # atacado madeira/ferragens/elétrico/construção
+    "1610", "1621", "1622", "1629",                       # madeira/serraria
+    "2330", "2342", "2349", "2391", "2392", "2320",       # concreto/cerâmica/cimento/britamento
+    "2511", "2512",                                       # esquadrias/estruturas metálicas
+)
 CNAE_BLOCK_PREFIX = ("45", "4761", "4762", "4763", "4781", "4782", "4783", "56", "96")
 
 
-def _cnae_status(receita: dict) -> tuple[str, bool, bool]:
+def _cnae_status(receita: dict) -> tuple[str, bool, bool, bool]:
+    """(cnae_str, é_alvo, é_construção, é_bloqueado). Vazio se sem receita."""
     if not receita:
-        return ("", False, False)
+        return ("", False, False, False)
     todos = [receita.get("cnae_primario", "")] + list(receita.get("cnaes_secundarios") or [])
     todos = [c for c in todos if c]
     alvo = any(c in CNAE_ALVO for c in todos)
-    block = any(any(c.startswith(p) for p in CNAE_BLOCK_PREFIX) for c in todos)
-    return (",".join(todos), alvo, block and not alvo)
+    construcao = alvo or any(c.startswith(p) for c in todos for p in CNAE_CONSTRUCAO_PREFIX)
+    block = (any(c.startswith(p) for c in todos for p in CNAE_BLOCK_PREFIX)) and not construcao
+    return (",".join(todos), alvo, construcao, block)
 
 
 def _montar_endereco(ctx) -> str:
@@ -62,12 +72,14 @@ def _decisor(ctx) -> dict:
 
 
 def consolidate(ctx) -> dict:
-    cnae_str, cnae_alvo, cnae_block = _cnae_status(ctx.receita)
+    cnae_str, cnae_alvo, cnae_construcao, cnae_block = _cnae_status(ctx.receita)
     situacao = ctx.receita.get("situacao", "")
+    cnae = {"alvo": cnae_alvo, "construcao": cnae_construcao, "block": cnae_block,
+            "tem": bool(cnae_str), "str": cnae_str}
 
     # ----- catálogo Rede 360 + qualificação ICP (lógica do workflow 03) -----
     match = match_catalogo(ctx.marcas, ctx.produtos, ctx.site_text)
-    icp = avaliar_icp(ctx, match, situacao, cnae_alvo, cnae_block)
+    icp = avaliar_icp(ctx, match, situacao, cnae)
 
     # ----- confiança (quantas fontes independentes concordam) -----
     ok = sum(1 for c in ctx.cross_checks if c["ok"])

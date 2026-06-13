@@ -264,6 +264,43 @@ def test_instagram_so_com_palavra_de_segmento_rejeitado():
     assert out["instagram"] == ""       # @ sem o nome distintivo é rejeitado
 
 
+def test_cnae_de_outro_setor_reprova():
+    # Casos reais do log: farmácia/correios/frutas com CNPJ confirmado != construção.
+    base = {"city": "Andradas", "cidade_normalizada": "andradas", "state": "MG",
+            "phone_clean": "3599990000", "cadastrar_bitrix": True,
+            "categoria_grupo": "materiais_construcao", "cnpj_google": "18693875000181"}
+    for cnae, nome in [(4771701, "Farmacia Cuidar"), (4724500, "Sabor do Morango"),
+                       (5310501, "Correios"), (8411600, "Prefeitura")]:
+        receita = {"cnpj": "18693875000181", "razao_social": nome.upper(),
+                   "nome_fantasia": nome, "situacao_cadastral": 2, "municipio": "ANDRADAS",
+                   "uf": "MG", "qsa": [], "cnae_fiscal": cnae}
+        out = enrich_lead({**base, "title": nome}, FakeTools(receita=receita))
+        assert out["e_icp"] is False, f"{nome} (CNAE {cnae}) deveria ser não-ICP"
+        assert "fora de materiais de construção" in out["motivo_icp"]
+
+
+def test_dominios_lixo_rejeitados():
+    from app.normalize import normalize_real_site
+    for junk in ["https://fonts.googleapis.com", "https://chat.whatsapp.com/ABC",
+                 "https://cutt.ly/x123", "https://bit.ly/abc"]:
+        assert normalize_real_site(junk) == "", f"{junk} deveria ser rejeitado"
+    # site real continua passando
+    assert normalize_real_site("https://lojanogueira.com.br").startswith("https://")
+
+
+def test_serraria_madeira_continua_icp():
+    # CNAE de madeira/serraria É construção -> mantém ICP.
+    lead = {"title": "Serraria Vasconcelos", "city": "Andradas",
+            "cidade_normalizada": "andradas", "state": "MG", "phone_clean": "3599990000",
+            "cadastrar_bitrix": True, "categoria_grupo": "madeiras_esquadrias",
+            "cnpj_google": "18693875000181"}
+    receita = {"cnpj": "18693875000181", "razao_social": "SERRARIA VASCONCELOS LTDA",
+               "nome_fantasia": "Serraria Vasconcelos", "situacao_cadastral": 2,
+               "municipio": "ANDRADAS", "uf": "MG", "qsa": [], "cnae_fiscal": 1610203}
+    out = enrich_lead(lead, FakeTools(receita=receita))
+    assert out["e_icp"] is True
+
+
 def test_cnpj_inativo_derruba_icp():
     receita = _receita_ok()
     receita["descricao_situacao_cadastral"] = "BAIXADA"
