@@ -16,11 +16,18 @@ from __future__ import annotations
 
 def _potencial(n_categorias: int, tem_whatsapp: bool, tem_telefone: bool,
                tem_decisor: bool, fornecedores: list, rating: float,
-               reviews: int) -> str:
+               reviews: int, cnpj_ok: bool = False) -> str:
     contato = tem_whatsapp or tem_telefone
-    if n_categorias >= 5 and contato and tem_decisor and (fornecedores or (rating > 4 and reviews >= 20)):
-        return "alto"
+    presenca = rating > 4 and reviews >= 20
+    # ALTO: mix confirmado (3+ categorias) OU já trabalha com marcas da Rede 360
     if n_categorias >= 3 and contato:
+        return "alto"
+    if fornecedores and contato and tem_decisor:
+        return "alto"
+    # MÉDIO: bem IDENTIFICADA (CNPJ ativo + contato direto), mesmo sem mix confirmado
+    if cnpj_ok and contato:
+        return "medio"
+    if contato and presenca:
         return "medio"
     return "baixo"
 
@@ -104,13 +111,17 @@ def avaliar_icp(ctx, match, situacao: str, cnae: dict) -> dict:
     else:
         # ----- PASSO 2/3 + FALLBACK -----
         if not tem_dados:
-            # sem site/Instagram: aprova provisório pelo segmento (Maps/CNAE)
+            # sem SITE p/ confirmar o mix de produtos (pode ter Instagram, CNPJ, etc.)
             e_icp = bool(ctx.cadastrar_bitrix or cnae["alvo"] or cnae["construcao"])
             dados_insuficientes = True
             if ctx.categoria_grupo:
                 segmentos = [ctx.categoria_grupo]
-            motivos.append("Aprovação PROVISÓRIA pelo segmento (CNAE/Google Maps) — "
-                           "sem site/Instagram p/ confirmar profundidade. Revisar manualmente.")
+            if ctx.cnpj:
+                motivos.append("Identidade confirmada pelo CNPJ; mix de produtos não "
+                               "confirmado (sem site da loja).")
+            else:
+                motivos.append("Do segmento pelo Google Maps; sem CNPJ/site para confirmar — "
+                               "revisar.")
         elif n_cat >= 3:
             motivos.append("Categorias confirmadas com evidência: " + ", ".join(
                 f"{c} ({', '.join(categorias[c][:2])})" for c in segmentos[:4]))
@@ -126,6 +137,7 @@ def avaliar_icp(ctx, match, situacao: str, cnae: dict) -> dict:
         motivos.append("Já trabalha com parceiros Rede 360: "
                        + ", ".join(match["fornecedores_rede360"]))
 
+    cnpj_ok = bool(ctx.cnpj) and (not situacao or situacao == "ATIVA")
     potencial = _potencial(
         n_cat,
         bool(ctx.site_whatsapp or ctx.instagram_business_phone),
@@ -133,9 +145,8 @@ def avaliar_icp(ctx, match, situacao: str, cnae: dict) -> dict:
         match["fornecedores_rede360"],
         float(ctx.raw_lead.get("rating", 0) or 0),
         int(ctx.raw_lead.get("reviews_count", ctx.raw_lead.get("reviewsCount", 0)) or 0),
+        cnpj_ok=cnpj_ok,
     ) if e_icp else "—"
-    if dados_insuficientes:
-        potencial = "baixo"
 
     return {
         "e_icp": e_icp,
