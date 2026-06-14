@@ -10,14 +10,21 @@ from __future__ import annotations
 from app.normalize import normalize_phone
 from app.enrich.catalogo_rede360 import match_catalogo
 from app.enrich.icp_rede360 import avaliar_icp
+from app.enrich.extract import telefone_valido
 
 
-def _melhor_whatsapp(cands: list) -> str:
-    """Escolhe o melhor número de WhatsApp — prefere celular (11 díg.) bem formado."""
-    norm = [normalize_phone(c) for c in cands if c]
+def _melhor_whatsapp(cands: list, lead_ddd: str = "") -> str:
+    """
+    Melhor WhatsApp — válido, e do MESMO DDD da loja quando conhecido (evita pegar
+    o contato de outra cidade, ex.: @construcentermpc de Brasília numa loja de MG).
+    """
+    norm = [telefone_valido(c) for c in cands if c]
     norm = [n for n in norm if n]
+    if lead_ddd:
+        mesmo = [n for n in norm if n[:2] == lead_ddd]
+        norm = mesmo            # se nenhum bate o DDD, não adota (melhor vazio)
     for n in norm:
-        if len(n) == 11:        # celular com 9 dígitos = WhatsApp válido
+        if len(n) == 11:        # celular = WhatsApp válido
             return n
     return norm[0] if norm else ""
 
@@ -92,6 +99,10 @@ def consolidate(ctx) -> dict:
     else:
         conf = "baixa"
 
+    # DDD da loja (telefone do Maps/Receita) — usado p/ filtrar contatos de fora.
+    telefone = ctx.phone_clean or ctx.receita.get("telefone", "") or ""
+    lead_ddd = telefone[:2] if telefone_valido(telefone) else ""
+
     # ----- flag de REVISÃO: identidade não confirmada (o caso perigoso) -----
     checks = {c["check"]: c["ok"] for c in ctx.cross_checks}
     revisar, revisar_motivos = False, []
@@ -108,15 +119,26 @@ def consolidate(ctx) -> dict:
     if conf == "baixa" and not revisar_motivos:
         revisar = True
         revisar_motivos.append("Poucas fontes cruzadas — confirmar manualmente")
+    # Instagram com contato de DDD diferente do telefone da loja = provável outra cidade
+    ig_phone = telefone_valido(ctx.instagram_business_phone)
+    if ctx.instagram and lead_ddd and ig_phone and ig_phone[:2] != lead_ddd:
+        revisar = True
+        revisar_motivos.append(
+            f"Instagram com contato de outra região (DDD {ig_phone[:2]} ≠ {lead_ddd}) — confirmar a loja")
 
     # ----- contatos consolidados (melhor fonte primeiro) -----
-    whatsapp = _melhor_whatsapp([ctx.site_whatsapp, ctx.instagram_business_phone])
-    telefone = ctx.phone_clean or ctx.receita.get("telefone", "") or ""
+    whatsapp = _melhor_whatsapp([ctx.site_whatsapp, ctx.instagram_business_phone], lead_ddd)
     email = ctx.site_email or ctx.receita.get("email", "") or ctx.email_maps or ""
-    # telefones extras (ex.: fixo da bio) — tira o principal e o WhatsApp p/ não repetir
+    # telefones extras — válidos, do mesmo DDD da loja, sem repetir principal/WhatsApp
     _princ = {normalize_phone(telefone), normalize_phone(whatsapp)}
-    telefones_extra = [p for p in (ctx.site_phones or [])
-                       if normalize_phone(p) and normalize_phone(p) not in _princ]
+    telefones_extra = []
+    for p in (ctx.site_phones or []):
+        v = telefone_valido(p)
+        if not v or v in _princ:
+            continue
+        if lead_ddd and v[:2] != lead_ddd:   # DDD diferente = provável outra loja
+            continue
+        telefones_extra.append(v)
     # e-mails extras (vendas, financeiro, orçamento...) — tira o principal
     emails_extra = [e for e in (ctx.site_emails or []) if e and e != email]
 

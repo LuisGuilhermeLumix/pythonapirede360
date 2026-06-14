@@ -103,11 +103,11 @@ def test_site_buscado_pelo_nome_do_outscraper():
         search_map={"site oficial": [SearchResult(
             title="Construtor Materiais", url="https://construtorbarbacena.com.br",
             content="Loja em Barbacena")]},
-        site_html='<a href="https://wa.me/5532999990000">zap</a> contato@construtor.com.br',
+        site_html='<a href="https://wa.me/5532991234567">zap</a> contato@construtor.com.br',
     )
     out = enrich_lead(_lead(), tools)  # _lead title = "Casa do Construtor Barbacena"
     assert out["site_dominio"] == "construtorbarbacena.com.br"
-    assert out["whatsapp"] == "32999990000"   # normalizado (sem 55)
+    assert out["whatsapp"] == "32991234567"   # normalizado (sem 55) e válido
     assert out["email"] == "contato@construtor.com.br"
 
 

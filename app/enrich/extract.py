@@ -18,6 +18,36 @@ WA_RX = re.compile(
 )
 # "Whatsapp 32 99142-3501", "zap (32) 99142-3501", "wpp: 3299142-3501"
 WA_TEXT_RX = re.compile(r"(?:whats?app|whats|wpp|zap)\b[\s:.\-]*(\+?[\d][\d\s().\-]{8,16})", re.I)
+
+# DDDs válidos no Brasil — descarta sequências de dígitos que não são telefone.
+VALID_DDD = {
+    "11", "12", "13", "14", "15", "16", "17", "18", "19", "21", "22", "24", "27",
+    "28", "31", "32", "33", "34", "35", "37", "38", "41", "42", "43", "44", "45",
+    "46", "47", "48", "49", "51", "53", "54", "55", "61", "62", "63", "64", "65",
+    "66", "67", "68", "69", "71", "73", "74", "75", "77", "79", "81", "82", "83",
+    "84", "85", "86", "87", "88", "89", "91", "92", "93", "94", "95", "96", "97",
+    "98", "99",
+}
+
+
+def telefone_valido(raw) -> str:
+    """Devolve o telefone BR normalizado se for plausível; senão "". Mata o lixo
+    do tipo '1199999973', '8000000119' que vem de JS/IDs no HTML."""
+    d = digits_only(raw)
+    if len(d) in (12, 13) and d.startswith("55"):
+        d = d[2:]
+    if len(d) not in (10, 11):
+        return ""
+    if d[:2] not in VALID_DDD:
+        return ""
+    sub = d[2:]
+    if len(set(sub)) <= 2:                       # 00000000, 99999999, 12121212
+        return ""
+    if len(d) == 11 and d[2] != "9":             # celular começa com 9
+        return ""
+    if len(d) == 10 and d[2] not in "2345":      # fixo começa com 2-5
+        return ""
+    return d
 MAIL_RX = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 TEL_RX = re.compile(r"(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-\s]?\d{4}")
 HREF_RX = re.compile(r'href=["\']([^"\']+)["\']', re.I)
@@ -53,9 +83,9 @@ def extract_contacts(html: str) -> dict:
     html = html or ""
     phones = []
     for m in TEL_RX.finditer(html):
-        d = digits_only(m.group(0))
-        if len(d) >= 10:
-            phones.append(d[-11:] if len(d) > 11 else d)
+        v = telefone_valido(m.group(0))
+        if v and v not in phones:
+            phones.append(v)
 
     emails: list[str] = []
     for m in MAIL_RX.finditer(html):
@@ -68,7 +98,7 @@ def extract_contacts(html: str) -> dict:
 
     return {
         "phones": list(dict.fromkeys(phones))[:8],
-        "whatsapp": digits_only(wa.group(1)) if wa else "",
+        "whatsapp": telefone_valido(wa.group(1)) if wa else "",
         "email": emails[0] if emails else "",
         "emails": emails[:8],
         "instagram": ig.group(1) if ig else "",
@@ -79,19 +109,17 @@ def whatsapp_from_text(text: str) -> str:
     """Pega o WhatsApp citado em texto (ex.: bio do Instagram 'Whatsapp 32 ...')."""
     m = WA_RX.search(text or "")
     if m:
-        return digits_only(m.group(1))
+        return telefone_valido(m.group(1))
     m = WA_TEXT_RX.search(text or "")
     if m:
-        d = digits_only(m.group(1))
-        if 10 <= len(d) <= 13:
-            return d
+        return telefone_valido(m.group(1))
     return ""
 
 
 def whatsapp_from_link(url: str) -> str:
     """Número de um link wa.me / api.whatsapp."""
     m = WA_RX.search(url or "")
-    return digits_only(m.group(1)) if m else ""
+    return telefone_valido(m.group(1)) if m else ""
 
 
 def extract_links(html: str) -> list[str]:
