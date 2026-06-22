@@ -40,7 +40,7 @@ if not logger.handlers:
 logger.setLevel(LOG_LEVEL)
 logger.propagate = False
 
-app = FastAPI(title="Rede 360 — Lead Processor", version="2.14.0")
+app = FastAPI(title="Rede 360 — Lead Processor", version="2.15.0")
 
 API_KEY = os.getenv("API_KEY", "")
 
@@ -118,7 +118,7 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.14.0"}
+    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.15.0"}
 
 
 @app.post("/process", response_model=LeadOut)

@@ -42,7 +42,14 @@ def _http(method: str, url: str, *, headers: dict | None = None,
         return json.loads(raw) if raw.strip() else {}
     except Exception as e:
         status = getattr(e, "code", "")
-        logger.warning("HTTP %s %s falhou: %s %s", method, url[:90], type(e).__name__, status)
+        # Tavily devolve 432 quando a chave esgotou créditos/limite do plano.
+        if status == 432 and "tavily.com" in url:
+            logger.error("TAVILY SEM CRÉDITOS (HTTP 432) — recarregue a chave TAVILY_API_KEY. "
+                         "Sem busca, o CNPJ/razão social/decisor NÃO são descobertos.")
+        elif status in (401, 403) and "tavily.com" in url:
+            logger.error("TAVILY chave inválida (HTTP %s) — confira TAVILY_API_KEY.", status)
+        else:
+            logger.warning("HTTP %s %s falhou: %s %s", method, url[:90], type(e).__name__, status)
         return None
 
 
