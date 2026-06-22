@@ -301,6 +301,25 @@ def test_serraria_madeira_continua_icp():
     assert out["e_icp"] is True
 
 
+def test_franquia_monomarca_reprovada():
+    # Caso real: Portobello Shop (franquia de marca única) = não-ICP.
+    lead = {"title": "PORTOBELLO SHOP", "city": "Varginha", "cidade_normalizada": "varginha",
+            "state": "MG", "phone_clean": "35999078840", "cadastrar_bitrix": True,
+            "categoria_grupo": "pisos_revestimentos", "website": "http://www.portobelloshop.com.br/"}
+    out = enrich_lead(lead, FakeTools(site_html="porcelanato Portobello e Mutina"))
+    assert out["e_icp"] is False
+    assert "marca única" in out["motivo_icp"]
+
+
+def test_loja_que_vende_marca_nao_e_franquia():
+    # Loja multimarca que VENDE Portobello (sem ser "X Shop") continua ICP.
+    lead = {"title": "Casa do Piso Varginha", "city": "Varginha", "cidade_normalizada": "varginha",
+            "state": "MG", "phone_clean": "35999078840", "cadastrar_bitrix": True,
+            "categoria_grupo": "pisos_revestimentos", "website": "https://casadopisovarginha.com.br"}
+    out = enrich_lead(lead, FakeTools(site_html="vendemos Portobello, Eliane, Incepa, porcelanato e rodape"))
+    assert out["e_icp"] is True
+
+
 def test_cnpj_inativo_derruba_icp():
     receita = _receita_ok()
     receita["descricao_situacao_cadastral"] = "BAIXADA"

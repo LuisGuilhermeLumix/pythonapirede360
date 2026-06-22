@@ -13,6 +13,34 @@ CNAE bloqueado é barrado de fato.
 """
 from __future__ import annotations
 
+# Fabricantes que operam lojas de MARCA ÚNICA (franquia/concept/showroom).
+# Loja "X Shop/Concept" é showroom exclusivo → fora do ICP (lojista multimarca).
+FABRICANTES_FRANQUIA = {
+    "portobello", "mutina", "eliane", "biancogres", "portinari", "ceusa",
+    "villagres", "incepa", "roca", "deca", "docol", "tigre", "suvinil",
+    "coral", "lorenzetti", "amanco", "duratex", "tramontina", "castelatto",
+    "buschinelli", "embramaco", "cecrisa", "itagres", "elizabeth", "delta",
+}
+_SUFIXOS_FRANQUIA = ("shop", "concept", "store", "boutique", "showroom",
+                     "espaco", "conceito", "studio")
+
+
+def _franquia_monomarca(ctx) -> str:
+    """Detecta franquia/showroom de marca única (Portobello Shop, Tigre Concept).
+    Retorna a marca detectada ou "". Exige a marca ADJACENTE a shop/concept/...,
+    ou o site ser o domínio do fabricante — não basta a loja só citar a marca."""
+    toks = (ctx.nome_norm or "").split()
+    for i, t in enumerate(toks):
+        if t in FABRICANTES_FRANQUIA:
+            viz = toks[max(0, i - 1):i] + toks[i + 1:i + 2]
+            if any(v in _SUFIXOS_FRANQUIA for v in viz):
+                return t
+    dom = ctx.site_domain or ""
+    for marca in FABRICANTES_FRANQUIA:
+        if marca in dom and any(s in dom for s in _SUFIXOS_FRANQUIA):
+            return marca
+    return ""
+
 
 def _potencial(n_categorias: int, tem_whatsapp: bool, tem_telefone: bool,
                tem_decisor: bool, fornecedores: list, rating: float,
@@ -94,9 +122,15 @@ def avaliar_icp(ctx, match, situacao: str, cnae: dict) -> dict:
     e_icp = True
     dados_insuficientes = False
 
+    franquia = _franquia_monomarca(ctx)
+
     if situacao and situacao != "ATIVA":
         e_icp = False
         motivos.append(f"CNPJ {situacao} na Receita")
+    elif franquia:
+        e_icp = False
+        motivos.append(f"Franquia/showroom de marca única ({franquia.title()}) — "
+                       "não é lojista multimarca (Passo 1d)")
     elif cnae["block"]:
         e_icp = False
         motivos.append("CNAE fora do segmento de materiais de construção")
