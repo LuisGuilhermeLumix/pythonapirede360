@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from app.normalize import normalizar_lote
 from app.scoring import avaliar_lote, PesosICP, LIMIAR_ENRIQUECER
 from app.enrich.orchestrator import enrich_lead
+from app.enrich.memoria import Memoria, uuid_de
 
 # Logging próprio que SEMPRE escreve no stdout (uvicorn já configura o root, então
 # basicConfig viraria no-op). Nível via env LOG_LEVEL (INFO default, DEBUG p/ tudo).
@@ -40,9 +41,13 @@ if not logger.handlers:
 logger.setLevel(LOG_LEVEL)
 logger.propagate = False
 
-app = FastAPI(title="Rede 360 — Lead Processor", version="2.16.0")
+app = FastAPI(title="Rede 360 — Lead Processor", version="2.17.0")
 
 API_KEY = os.getenv("API_KEY", "")
+
+# Memória de leads já enriquecidos (não re-rodar). Persiste em SQLite —
+# aponte MEMORIA_PATH p/ um volume no EasyPanel p/ sobreviver a redeploy.
+MEM = Memoria()
 
 
 @app.on_event("startup")
@@ -100,10 +105,16 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
     leads = normalizar_lote(payload, cidade_base=cidade, categoria=categoria)
     scored = avaliar_lote(leads, PesosICP(), limiar_enriquecer=lim)
 
+    # marca cada lead com UUID determinístico + se já passou pela memória
+    for r in scored:
+        r["uuid"] = uuid_de(r.get("title", ""), r.get("city", ""))
+        r["ja_processado"] = MEM.ja_visto(r["uuid"])
+
     rec = _contar_recebido(payload)
     icp = sum(1 for r in scored if r["cadastrar_bitrix"])
-    logger.info("PROCESS cidade=%r recebidos=%s normalizados=%s icp=%s descartados=%s",
-                cidade or "-", rec, len(leads), icp, len(scored) - icp)
+    repetidos = sum(1 for r in scored if r["ja_processado"])
+    logger.info("PROCESS cidade=%r recebidos=%s normalizados=%s icp=%s descartados=%s ja_processados=%s",
+                cidade or "-", rec, len(leads), icp, len(scored) - icp, repetidos)
 
     return {
         "leads": scored,
@@ -118,7 +129,7 @@ def _run(payload: Any, cidade: str, categoria: str, limiar: int | None) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.16.0"}
+    return {"status": "ok", "service": "rede360-lead-processor", "version": "2.17.0"}
 
 
 @app.post("/process", response_model=LeadOut)
@@ -147,21 +158,55 @@ def process_raw(payload: Any, x_api_key: str | None = Header(default=None)):
 
 class EnrichRequest(BaseModel):
     lead: dict = Field(..., description="Um lead (saída do /process) a enriquecer")
+    force: bool = Field(False, description="True ignora a memória e re-enriquece")
 
 
 class EnrichBatchRequest(BaseModel):
     leads: list[dict] = Field(..., description="Lista de leads a enriquecer")
 
 
+def _enriquecer_com_memoria(lead: dict, force: bool = False) -> dict:
+    uid = uuid_de(lead.get("title", ""), lead.get("city", ""))
+    if not force and MEM.ja_visto(uid):
+        logger.info("ENRICH PULADO (memória) %s uuid=%s", str(lead.get("title", ""))[:40], uid)
+        return {
+            "uuid": uid, "ja_processado": True, "title": lead.get("title", ""),
+            "e_icp": False, "cadastrar_bitrix": False,
+            "motivo_icp": "Já enriquecido anteriormente — pulado (memória).",
+        }
+    dossie = enrich_lead(lead)
+    dossie["uuid"] = uid
+    dossie["ja_processado"] = False
+    MEM.marcar(uid, lead.get("title", ""), lead.get("city", ""))
+    return dossie
+
+
 @app.post("/enrich")
 def enrich(req: EnrichRequest, x_api_key: str | None = Header(default=None)):
-    """Recebe 1 lead, devolve o dossiê consolidado (pronto p/ o Bitrix)."""
+    """1 lead -> dossiê. Pula (sem gastar API) se já passou pela memória."""
     _check_auth(x_api_key)
-    return enrich_lead(req.lead)
+    return _enriquecer_com_memoria(req.lead, req.force)
 
 
 @app.post("/enrich/batch")
 def enrich_batch(req: EnrichBatchRequest, x_api_key: str | None = Header(default=None)):
-    """Enriquece vários leads de uma vez."""
+    """Enriquece vários leads de uma vez (respeita a memória)."""
     _check_auth(x_api_key)
-    return {"leads": [enrich_lead(l) for l in req.leads]}
+    return {"leads": [_enriquecer_com_memoria(l) for l in req.leads]}
+
+
+# --------------------------------------------------------------------------- #
+# Memória de leads já enriquecidos (anti re-processamento)
+# --------------------------------------------------------------------------- #
+
+@app.get("/memoria/stats")
+def memoria_stats(x_api_key: str | None = Header(default=None)):
+    _check_auth(x_api_key)
+    return {"total_processados": MEM.total(), "path": MEM.path}
+
+
+@app.delete("/memoria")
+def memoria_limpar(x_api_key: str | None = Header(default=None)):
+    """Zera a memória (ex.: p/ reprocessar tudo)."""
+    _check_auth(x_api_key)
+    return {"removidos": MEM.limpar()}

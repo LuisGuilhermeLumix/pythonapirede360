@@ -11,6 +11,11 @@ venv/
 .env
 .env.*
 
+# Memória de leads (runtime) — SQLite
+data/
+*.db
+*.sqlite*
+
 # Workflow do n8n — contém token de webhook do Bitrix. NÃO versionar aqui.
 *.json
 !app/**/*.json
